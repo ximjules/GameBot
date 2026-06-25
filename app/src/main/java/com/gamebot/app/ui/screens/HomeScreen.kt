@@ -2,6 +2,7 @@ package com.gamebot.app.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,27 +10,35 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.gamebot.app.R
 import com.gamebot.app.ui.theme.*
+import com.gamebot.app.viewmodel.HomeViewModel
 import android.content.Context
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.platform.LocalContext
 
 @Composable
-fun HomeScreen(onEventClick: () -> Unit = {}) {
+fun HomeScreen(
+    onEventClick: () -> Unit = {},
+    viewModel: HomeViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
     val username = prefs.getString("username", "PlayerOne") ?: "PlayerOne"
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -105,80 +114,142 @@ fun HomeScreen(onEventClick: () -> Unit = {}) {
         Spacer(modifier = Modifier.height(16.dp))
 
         // Trenutno igraš kartica
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(SurfaceDark)
-        ) {
-            Row(modifier = Modifier.padding(12.dp)) {
-                Image(
-                    painter = painterResource(id = R.drawable.acunity),
-                    contentDescription = "Cover art",
-                    modifier = Modifier
-                        .size(70.dp)
-                        .clip(RoundedCornerShape(10.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Trenutno igraš...",
-                        fontSize = 11.sp,
-                        color = TextSecondary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Assassin's Creed Unity",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { 0.87f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = PrimaryPurple,
-                        trackColor = SurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "87% completed",
-                            fontSize = 11.sp,
-                            color = TextSecondary
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(SurfaceDark),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = PrimaryPurple, modifier = Modifier.size(24.dp))
+            }
+        } else if (uiState.currentlyPlaying != null) {
+            val game = uiState.currentlyPlaying!!
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(SurfaceDark)
+            ) {
+                Row(modifier = Modifier.padding(12.dp)) {
+                    if (game.coverUrl.isNotEmpty()) {
+                        AsyncImage(
+                            model = game.coverUrl,
+                            contentDescription = "Cover art",
+                            modifier = Modifier
+                                .size(70.dp)
+                                .clip(RoundedCornerShape(10.dp)),
+                            contentScale = ContentScale.Crop
                         )
-                        Button(
-                            onClick = { },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PrimaryPurple
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(30.dp)
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(70.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(SurfaceVariant),
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Nastavi igrati",
-                                color = TextPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
+                                text = game.title.first().toString(),
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PrimaryPurple
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Trenutno igraš...",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = game.title,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                            maxLines = 1
+                        )
+                        if (game.genre.isNotEmpty()) {
+                            Text(
+                                text = game.genre,
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { game.progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(5.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = PrimaryPurple,
+                            trackColor = SurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${(game.progress * 100).toInt()}% completed",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                            Button(
+                                onClick = { },
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text(
+                                    text = "Nastavi igrati",
+                                    color = TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Nema igre koja se trenutno igra
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(SurfaceDark)
+                    .padding(20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "🎮", fontSize = 32.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Nema aktivnih igara",
+                        fontSize = 14.sp,
+                        color = TextSecondary
+                    )
+                    Text(
+                        text = "Dodaj igru u Library!",
+                        fontSize = 12.sp,
+                        color = PrimaryPurple
+                    )
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Statistike s vertikalnim separatorima
+        // Statistike s pravim podacima
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -188,21 +259,17 @@ fun HomeScreen(onEventClick: () -> Unit = {}) {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            StatItem(value = "256", label = "Igre")
+            StatItem(value = uiState.totalGames.toString(), label = "Igre")
             Divider(
-                modifier = Modifier
-                    .height(30.dp)
-                    .width(1.dp),
+                modifier = Modifier.height(30.dp).width(1.dp),
                 color = SurfaceVariant
             )
-            StatItem(value = "76", label = "Backlog")
+            StatItem(value = uiState.backlogCount.toString(), label = "Backlog")
             Divider(
-                modifier = Modifier
-                    .height(30.dp)
-                    .width(1.dp),
+                modifier = Modifier.height(30.dp).width(1.dp),
                 color = SurfaceVariant
             )
-            StatItem(value = "3001", label = "Trofej")
+            StatItem(value = uiState.completedCount.toString(), label = "Odigrano")
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -243,23 +310,28 @@ fun HomeScreen(onEventClick: () -> Unit = {}) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Nedavni događaji
-        Text(
-            text = "Nedavni događaji",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextPrimary
-        )
+        // Nadolazeći događaji
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Nadolazeći događaji",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Box(modifier = Modifier.clickable { onEventClick() }) {
-            EventItem(
-                title = "Apex Legends sesija",
-                time = "Večeras • 20:00",
-                participants = "+3"
-            )
-        }
+        EventItem(
+            title = "Apex Legends sesija",
+            time = "Večeras • 20:00",
+            participants = "+3",
+            onClick = onEventClick
+        )
     }
 }
 
@@ -346,12 +418,18 @@ fun TrophyItem(
 }
 
 @Composable
-fun EventItem(title: String, time: String, participants: String) {
+fun EventItem(
+    title: String,
+    time: String,
+    participants: String,
+    onClick: () -> Unit = {}
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(SurfaceDark)
+            .clickable { onClick() }
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -1,6 +1,7 @@
 package com.gamebot.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,7 +55,7 @@ val dummyPoll = Poll(
 )
 
 @Composable
-fun CommunityScreen() {
+fun CommunityScreen(onAddSetupClick: () -> Unit = {}) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Objave", "Pratiš")
 
@@ -82,12 +83,13 @@ fun CommunityScreen() {
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(SurfaceDark),
+                    .background(SurfaceDark)
+                    .clickable { onAddSetupClick() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Nova objava",
+                    imageVector = Icons.Default.CameraAlt,
+                    contentDescription = "Dodaj setup",
                     tint = TextSecondary,
                     modifier = Modifier.size(20.dp)
                 )
@@ -150,7 +152,6 @@ fun PostItem(post: Post) {
             .background(SurfaceDark)
             .padding(14.dp)
     ) {
-        // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
@@ -190,7 +191,6 @@ fun PostItem(post: Post) {
             color = TextPrimary
         )
 
-        // Placeholder za sliku
         if (post.hasImage) {
             Spacer(modifier = Modifier.height(10.dp))
             Box(
@@ -212,7 +212,6 @@ fun PostItem(post: Post) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Like i comment
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = Icons.Default.FavoriteBorder,
@@ -244,7 +243,6 @@ fun PollItem(poll: Poll) {
             .background(SurfaceDark)
             .padding(14.dp)
     ) {
-        // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier

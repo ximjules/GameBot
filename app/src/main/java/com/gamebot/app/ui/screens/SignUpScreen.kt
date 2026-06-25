@@ -14,13 +14,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.gamebot.app.R
 import com.gamebot.app.ui.theme.*
 
@@ -33,7 +35,11 @@ fun SignUpScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordAgain by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
+    val db = FirebaseFirestore.getInstance()
 
     Column(
         modifier = Modifier
@@ -43,7 +49,6 @@ fun SignUpScreen(
             .padding(horizontal = 24.dp)
             .padding(top = 24.dp, bottom = 32.dp)
     ) {
-        // Back gumb
         IconButton(onClick = onBackClick) {
             Icon(
                 imageVector = Icons.Default.ArrowBack,
@@ -54,7 +59,6 @@ fun SignUpScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Logo + naziv
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(
                 painter = painterResource(id = R.drawable.logo),
@@ -74,7 +78,7 @@ fun SignUpScreen(
         Spacer(modifier = Modifier.height(32.dp))
 
         Text(
-            text = "Sign in",
+            text = "Sign Up",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
@@ -173,30 +177,89 @@ fun SignUpScreen(
             singleLine = true
         )
 
+        // Error poruka
+        if (errorMessage.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = errorMessage,
+                fontSize = 12.sp,
+                color = ErrorRed
+            )
+        }
+
         Spacer(modifier = Modifier.height(40.dp))
 
-        // DONE gumb
         Button(
             onClick = {
-                val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
-                prefs.edit()
-                    .putString("username", username)
-                    .putBoolean("is_logged_in", true)
-                    .apply()
-                onSignUpSuccess()
+                when {
+                    username.isEmpty() || email.isEmpty() || password.isEmpty() -> {
+                        errorMessage = "Molimo ispunite sva polja"
+                    }
+                    password != passwordAgain -> {
+                        errorMessage = "Lozinke se ne podudaraju"
+                    }
+                    password.length < 6 -> {
+                        errorMessage = "Lozinka mora imati najmanje 6 znakova"
+                    }
+                    else -> {
+                        isLoading = true
+                        errorMessage = ""
+                        auth.createUserWithEmailAndPassword(email, password)
+                            .addOnSuccessListener { result ->
+                                val uid = result.user?.uid ?: ""
+                                // Spremi korisnika u Firestore
+                                val user = hashMapOf(
+                                    "username" to username,
+                                    "email" to email,
+                                    "level" to 1,
+                                    "xp" to 0,
+                                    "games" to 0,
+                                    "trophies" to 0,
+                                    "friends" to 0,
+                                    "createdAt" to System.currentTimeMillis()
+                                )
+                                db.collection("users").document(uid)
+                                    .set(user)
+
+                                // Ne cekamo Firestore odmah nastavljamo
+                                val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
+                                prefs.edit()
+                                    .putString("username", username)
+                                    .putBoolean("is_logged_in", true)
+                                    .apply()
+                                isLoading = false
+                                onSignUpSuccess()
+                            }
+                            .addOnFailureListener { e ->
+                                errorMessage = when {
+                                    e.message?.contains("email") == true -> "Email već postoji"
+                                    else -> "Greška pri registraciji, pokušajte ponovo"
+                                }
+                                isLoading = false
+                            }
+                    }
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
-            shape = RoundedCornerShape(14.dp)
+            shape = RoundedCornerShape(14.dp),
+            enabled = !isLoading
         ) {
-            Text(
-                text = "DONE",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = TextPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                Text(
+                    text = "DONE",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            }
         }
     }
 }

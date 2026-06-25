@@ -2,15 +2,17 @@ package com.gamebot.app.ui.screens
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,13 +20,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gamebot.app.ui.theme.*
+import com.gamebot.app.viewmodel.HomeViewModel
+import com.google.firebase.auth.FirebaseAuth
 
 @Composable
-fun ProfileScreen() {
+fun ProfileScreen(
+    onLogout: () -> Unit = {},
+    viewModel: HomeViewModel = viewModel()
+) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
     val username = prefs.getString("username", "PlayerOne") ?: "PlayerOne"
+    val uiState by viewModel.uiState.collectAsState()
 
     Column(
         modifier = Modifier
@@ -47,20 +56,6 @@ fun ProfileScreen() {
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(SurfaceDark),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Postavke",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -75,7 +70,6 @@ fun ProfileScreen() {
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Avatar placeholder
             Box(
                 modifier = Modifier
                     .size(80.dp)
@@ -100,82 +94,48 @@ fun ProfileScreen() {
                 color = TextPrimary
             )
             Text(
-                text = "Level 27",
-                fontSize = 13.sp,
-                color = PrimaryPurple,
-                fontWeight = FontWeight.SemiBold
+                text = FirebaseAuth.getInstance().currentUser?.email ?: "",
+                fontSize = 12.sp,
+                color = TextSecondary
             )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // XP progress
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = "1825 XP", fontSize = 11.sp, color = TextSecondary)
-                    Text(text = "2500 XP", fontSize = 11.sp, color = TextSecondary)
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                LinearProgressIndicator(
-                    progress = { 0.73f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = PrimaryPurple,
-                    trackColor = SurfaceVariant
-                )
-            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Statistike
+            // Statistike s pravim podacima
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                ProfileStat(value = "15", label = "Igre")
+                ProfileStat(value = uiState.totalGames.toString(), label = "Igre")
                 Divider(
                     modifier = Modifier.height(30.dp).width(1.dp),
                     color = SurfaceVariant
                 )
-                ProfileStat(value = "320", label = "Trofeji")
+                ProfileStat(value = uiState.backlogCount.toString(), label = "Backlog")
                 Divider(
                     modifier = Modifier.height(30.dp).width(1.dp),
                     color = SurfaceVariant
                 )
-                ProfileStat(value = "7", label = "Prijatelji")
+                ProfileStat(value = uiState.completedCount.toString(), label = "Odigrano")
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Menu opcije
+        // Menu opcije - samo funkcionalne
         Column(
             modifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             ProfileMenuItem(
-                icon = Icons.Default.BarChart,
-                title = "Statistika",
-                onClick = {}
-            )
-            ProfileMenuItem(
-                icon = Icons.Default.EmojiEvents,
-                title = "Postignuća",
-                onClick = {}
-            )
-            ProfileMenuItem(
-                icon = Icons.Default.Settings,
-                title = "Postavke",
-                onClick = {}
-            )
-            ProfileMenuItem(
-                icon = Icons.Default.Help,
-                title = "Pomoć & podrška",
-                onClick = {}
+                icon = Icons.AutoMirrored.Filled.ExitToApp,
+                title = "Odjava",
+                onClick = {
+                    FirebaseAuth.getInstance().signOut()
+                    val editPrefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
+                    editPrefs.edit().clear().apply()
+                    onLogout()
+                }
             )
         }
 
@@ -211,6 +171,7 @@ fun ProfileMenuItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(SurfaceDark)
+            .clickable { onClick() }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -244,4 +205,5 @@ fun ProfileMenuItem(
         )
     }
 }
+
 

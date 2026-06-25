@@ -7,21 +7,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 val Typography = Typography(
-    // Veliki naslovi - npr. "Dobrodošao natrag, PlayerOne!"
+    // Veliki naslovi
     headlineLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
         color = TextPrimary
     ),
-    // Srednji naslovi - npr. naziv igre
+    // Srednji naslovi
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.SemiBold,
         fontSize = 20.sp,
         color = TextPrimary
     ),
-    // Manji naslovi - npr. nazivi sekcija
+    // Manji naslovi
     titleMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.SemiBold,

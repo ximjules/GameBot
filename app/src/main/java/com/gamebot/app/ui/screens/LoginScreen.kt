@@ -1,5 +1,6 @@
 package com.gamebot.app.ui.screens
 
+import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -11,26 +12,29 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
 import com.gamebot.app.R
 import com.gamebot.app.ui.theme.*
-import android.content.Context
-import androidx.compose.ui.platform.LocalContext
+import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
 fun LoginScreen(
     onBackClick: () -> Unit,
     onLoginSuccess: () -> Unit
 ) {
-    var username by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
 
     Column(
         modifier = Modifier
@@ -39,7 +43,6 @@ fun LoginScreen(
             .padding(horizontal = 24.dp)
             .padding(top = 24.dp)
     ) {
-        // Back gumb
         IconButton(onClick = onBackClick) {
             Icon(
                 imageVector = Icons.Default.ArrowBack,
@@ -50,10 +53,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Logo + naziv
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Image(
                 painter = painterResource(id = R.drawable.logo),
                 contentDescription = "Logo",
@@ -71,7 +71,6 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(40.dp))
 
-        // Naslov
         Text(
             text = "Login",
             fontSize = 28.sp,
@@ -81,18 +80,14 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Username polje
-        Text(
-            text = "Username or Email",
-            fontSize = 13.sp,
-            color = TextSecondary
-        )
+        Text(text = "Email", fontSize = 13.sp, color = TextSecondary)
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
-            value = username,
-            onValueChange = { username = it },
+            value = email,
+            onValueChange = { email = it },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = PrimaryPurple,
                 unfocusedBorderColor = SurfaceVariant,
@@ -107,12 +102,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Password polje
-        Text(
-            text = "Password",
-            fontSize = 13.sp,
-            color = TextSecondary
-        )
+        Text(text = "Password", fontSize = 13.sp, color = TextSecondary)
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = password,
@@ -133,35 +123,80 @@ fun LoginScreen(
             singleLine = true
         )
 
+        // Error poruka
+        if (errorMessage.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = errorMessage,
+                fontSize = 12.sp,
+                color = ErrorRed
+            )
+        }
+
         Spacer(modifier = Modifier.height(40.dp))
 
-        // DONE gumb
         Button(
             onClick = {
-                val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
-                prefs.edit()
-                    .putString("username", username)
-                    .putBoolean("is_logged_in", true)  // DODAJ OVO
-                    .apply()
-                onLoginSuccess()
+                if (email.isEmpty() || password.isEmpty()) {
+                    errorMessage = "Molimo unesite email i lozinku"
+                    return@Button
+                }
+                isLoading = true
+                errorMessage = ""
+                auth.signInWithEmailAndPassword(email, password)
+                    .addOnSuccessListener { result ->
+                        val uid = result.user?.uid ?: ""
+                        val db = FirebaseFirestore.getInstance()
+                        db.collection("users").document(uid).get()
+                            .addOnSuccessListener { document ->
+                                val username = document.getString("username") ?: email.substringBefore("@")
+                                val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
+                                prefs.edit()
+                                    .putString("username", username)
+                                    .putBoolean("is_logged_in", true)
+                                    .apply()
+                                isLoading = false
+                                onLoginSuccess()
+                            }
+                            .addOnFailureListener {
+                                val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
+                                prefs.edit()
+                                    .putString("username", email.substringBefore("@"))
+                                    .putBoolean("is_logged_in", true)
+                                    .apply()
+                                isLoading = false
+                                onLoginSuccess()
+                            }
+                    }
+                    .addOnFailureListener { e ->
+                        errorMessage = "Pogrešan email ili lozinka"
+                        isLoading = false
+                    }
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
-            shape = RoundedCornerShape(14.dp)
+            shape = RoundedCornerShape(14.dp),
+            enabled = !isLoading
         ) {
-            Text(
-                text = "DONE",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = TextPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                Text(
+                    text = "DONE",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Platforme ikone
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,

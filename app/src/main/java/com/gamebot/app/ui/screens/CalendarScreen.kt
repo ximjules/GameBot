@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -14,34 +15,28 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gamebot.app.data.EventModel
+import com.gamebot.app.notifications.NotificationHelper
 import com.gamebot.app.ui.theme.*
-
-data class GameEvent(
-    val id: Int,
-    val title: String,
-    val date: String,
-    val time: String,
-    val description: String,
-    val participants: Int,
-    val day: Int
-)
-
-val dummyEvents = listOf(
-    GameEvent(1, "Apex Legends sesija", "15.5.2024", "20:00 - 23:00", "Večernja casual sesija, svi dobrodošli! 🎮", 4, 15),
-    GameEvent(2, "Destiny 2 Raid", "17.5.2024", "18:00 - 22:00", "Vault of Glass raid, trebamo 6 igrača", 3, 17),
-    GameEvent(3, "FIFA 24 turnir", "20.5.2024", "19:00 - 23:00", "Mini turnir, prijavi se do petka!", 6, 20)
-)
+import com.gamebot.app.viewmodel.EventViewModel
 
 @Composable
-fun CalendarScreen() {
-    var selectedDay by remember { mutableStateOf(15) }
-    val currentMonth = "Svibanj 2024."
+fun CalendarScreen(viewModel: EventViewModel = viewModel()) {
+    var selectedDay by remember { mutableStateOf(1) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    val currentMonth = "Lipanj 2026."
+    val context = LocalContext.current
+    val uiState by viewModel.uiState.collectAsState()
 
-    val selectedEvents = dummyEvents.filter { it.day == selectedDay }
+    val selectedEvents = uiState.events.filter { it.day == selectedDay }
+    val eventDays = uiState.events.map { it.day }
 
     Column(
         modifier = Modifier
@@ -67,13 +62,14 @@ fun CalendarScreen() {
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(SurfaceDark),
+                    .background(SurfaceDark)
+                    .clickable { showAddDialog = true },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Dodaj događaj",
-                    tint = TextSecondary,
+                    tint = PrimaryPurple,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -88,7 +84,6 @@ fun CalendarScreen() {
                 .background(SurfaceDark)
                 .padding(16.dp)
         ) {
-            // Mjesec navigacija
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -114,7 +109,6 @@ fun CalendarScreen() {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Dani u tjednu
             val dayNames = listOf("Pon", "Uto", "Sri", "Čet", "Pet", "Sub", "Ned")
             Row(modifier = Modifier.fillMaxWidth()) {
                 dayNames.forEach { day ->
@@ -131,10 +125,7 @@ fun CalendarScreen() {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Dani u mjesecu
-            val days = (1..31).toList()
-            val eventDays = dummyEvents.map { it.day }
-
+            val days = (1..30).toList()
             days.chunked(7).forEach { week ->
                 Row(modifier = Modifier.fillMaxWidth()) {
                     week.forEach { day ->
@@ -166,7 +157,6 @@ fun CalendarScreen() {
                             )
                         }
                     }
-                    // Popuni ostatak tjedna ako je kraći
                     repeat(7 - week.size) {
                         Box(modifier = Modifier.weight(1f).aspectRatio(1f))
                     }
@@ -176,7 +166,6 @@ fun CalendarScreen() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Nadolazeći događaji naslov
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -185,7 +174,7 @@ fun CalendarScreen() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (selectedEvents.isEmpty()) "Nadolazeći događaji" else "Događaji — ${selectedDay}.5.2024.",
+                text = if (selectedEvents.isEmpty()) "Nadolazeći događaji" else "Događaji — ${selectedDay}.6.2026.",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
@@ -194,8 +183,14 @@ fun CalendarScreen() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (selectedEvents.isEmpty()) {
-            // Nema događaja
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = PrimaryPurple)
+            }
+        } else if (selectedEvents.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -218,6 +213,12 @@ fun CalendarScreen() {
                         fontSize = 14.sp,
                         color = TextSecondary
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Klikni + za dodavanje",
+                        fontSize = 12.sp,
+                        color = PrimaryPurple
+                    )
                 }
             }
         } else {
@@ -229,15 +230,160 @@ fun CalendarScreen() {
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 items(selectedEvents) { event ->
-                    EventDetailItem(event = event)
+                    EventDetailItem(
+                        event = event,
+                        context = context,
+                        onDelete = { viewModel.deleteEvent(event.id) }
+                    )
                 }
             }
         }
     }
+
+    if (showAddDialog) {
+        AddEventDialog(
+            selectedDay = selectedDay,
+            onDismiss = { showAddDialog = false },
+            onAdd = { event ->
+                viewModel.addEvent(event)
+                showAddDialog = false
+            }
+        )
+    }
 }
 
 @Composable
-fun EventDetailItem(event: GameEvent) {
+fun AddEventDialog(
+    selectedDay: Int,
+    onDismiss: () -> Unit,
+    onAdd: (EventModel) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var time by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var participants by remember { mutableStateOf("1") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceDark,
+        title = {
+            Text(
+                text = "Dodaj događaj",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Naziv događaja", color = TextSecondary) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryPurple,
+                        unfocusedBorderColor = SurfaceVariant,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = PrimaryPurple,
+                        focusedContainerColor = SurfaceVariant,
+                        unfocusedContainerColor = SurfaceVariant
+                    ),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = time,
+                    onValueChange = { time = it },
+                    label = { Text("Vrijeme (npr. 20:00 - 23:00)", color = TextSecondary) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryPurple,
+                        unfocusedBorderColor = SurfaceVariant,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = PrimaryPurple,
+                        focusedContainerColor = SurfaceVariant,
+                        unfocusedContainerColor = SurfaceVariant
+                    ),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Opis", color = TextSecondary) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryPurple,
+                        unfocusedBorderColor = SurfaceVariant,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = PrimaryPurple,
+                        focusedContainerColor = SurfaceVariant,
+                        unfocusedContainerColor = SurfaceVariant
+                    )
+                )
+                OutlinedTextField(
+                    value = participants,
+                    onValueChange = { participants = it },
+                    label = { Text("Broj sudionika", color = TextSecondary) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryPurple,
+                        unfocusedBorderColor = SurfaceVariant,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = PrimaryPurple,
+                        focusedContainerColor = SurfaceVariant,
+                        unfocusedContainerColor = SurfaceVariant
+                    ),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (title.isNotEmpty()) {
+                        onAdd(
+                            EventModel(
+                                title = title,
+                                date = "${selectedDay}.6.2026.",
+                                time = time,
+                                description = description,
+                                participants = participants.toIntOrNull() ?: 1,
+                                day = selectedDay
+                            )
+                        )
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Dodaj", color = TextPrimary)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Odustani", color = TextSecondary)
+            }
+        }
+    )
+}
+
+@Composable
+fun EventDetailItem(
+    event: EventModel,
+    context: android.content.Context,
+    onDelete: () -> Unit = {}
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -272,12 +418,14 @@ fun EventDetailItem(event: GameEvent) {
             Text(text = event.time, fontSize = 12.sp, color = TextSecondary)
         }
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = event.description,
-            fontSize = 13.sp,
-            color = TextSecondary
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+        if (event.description.isNotEmpty()) {
+            Text(
+                text = event.description,
+                fontSize = 13.sp,
+                color = TextSecondary
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -299,7 +447,7 @@ fun EventDetailItem(event: GameEvent) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
-                    onClick = { },
+                    onClick = onDelete,
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
                     border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp),
@@ -309,13 +457,19 @@ fun EventDetailItem(event: GameEvent) {
                     Text(text = "Izbriši", fontSize = 12.sp, color = ErrorRed)
                 }
                 Button(
-                    onClick = { },
+                    onClick = {
+                        NotificationHelper.showNewEventNotification(
+                            context = context,
+                            eventName = event.title,
+                            time = event.time
+                        )
+                    },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
-                    Text(text = "Uredi", fontSize = 12.sp, color = TextPrimary)
+                    Text(text = "Podsjetnik 🔔", fontSize = 12.sp, color = TextPrimary)
                 }
             }
         }
