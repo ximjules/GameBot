@@ -379,7 +379,15 @@ fun uploadSetup(
     onSuccess: () -> Unit,
     onFailure: () -> Unit
 ) {
-    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+    val auth = FirebaseAuth.getInstance()
+    val uid = auth.currentUser?.uid
+    if (uid == null) {
+        onFailure()
+        return
+    }
+    val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
+    val username = prefs.getString("username", auth.currentUser?.email?.substringBefore("@") ?: "Player")
+        ?: "Player"
     val storage = FirebaseStorage.getInstance()
     val storageRef = storage.reference
         .child("setups/$uid/${System.currentTimeMillis()}.jpg")
@@ -396,7 +404,28 @@ fun uploadSetup(
                     "createdAt" to System.currentTimeMillis()
                 )
                 db.collection("setups").add(setup)
-                    .addOnSuccessListener { onSuccess() }
+                    .addOnSuccessListener {
+                        val postText = buildString {
+                            append(setupName)
+                            if (setupSpecs.isNotBlank()) {
+                                append("\n\n")
+                                append(setupSpecs)
+                            }
+                        }
+                        val post = hashMapOf(
+                            "userId" to uid,
+                            "username" to username,
+                            "content" to postText,
+                            "imageUrl" to downloadUrl.toString(),
+                            "createdAt" to System.currentTimeMillis(),
+                            "likedBy" to emptyList<String>(),
+                            "comments" to 0,
+                            "latestComment" to ""
+                        )
+                        db.collection("communityPosts").add(post)
+                            .addOnSuccessListener { onSuccess() }
+                            .addOnFailureListener { onFailure() }
+                    }
                     .addOnFailureListener { onFailure() }
             }
         }

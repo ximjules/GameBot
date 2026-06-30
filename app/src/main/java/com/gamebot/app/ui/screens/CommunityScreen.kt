@@ -1,5 +1,6 @@
 package com.gamebot.app.ui.screens
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,56 +16,43 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.gamebot.app.data.CommunityPostModel
 import com.gamebot.app.ui.theme.*
-
-data class Post(
-    val username: String,
-    val timeAgo: String,
-    val content: String,
-    val likes: Int,
-    val comments: Int,
-    val hasImage: Boolean = false
-)
-
-data class Poll(
-    val username: String,
-    val timeAgo: String,
-    val question: String,
-    val options: List<Pair<String, Float>>
-)
-
-val dummyPosts = listOf(
-    Post("Gamer_420", "prije 2h", "Moj novi setup! Što kažete? 😎", 128, 32, true),
-    Post("ProGamer99", "prije 4h", "Upravo sam platinirao God of War Ragnarök! 🏆 Nevjerojatna igra!", 95, 18),
-    Post("GameMaster", "prije 6h", "Tko igra Elden Ring večeras? Trebam pomoć s Maleniom 😅", 47, 23),
-    Post("NightOwlGamer", "prije 8h", "Red Dead Redemption 2 je remek-djelo. Svaki put kad igram otkrivam nešto novo.", 203, 41)
-)
-
-val dummyPoll = Poll(
-    username = "GameMaster",
-    timeAgo = "prije 5h",
-    question = "Koja vam je najdraža igra ove godine?",
-    options = listOf(
-        "Elden Ring DLC" to 0.42f,
-        "Final Fantasy VII Rebirth" to 0.33f,
-        "Stellar Blade" to 0.25f
-    )
-)
+import com.gamebot.app.viewmodel.CommunityViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
-fun CommunityScreen(onAddSetupClick: () -> Unit = {}) {
+fun CommunityScreen(
+    onAddSetupClick: () -> Unit = {},
+    viewModel: CommunityViewModel = viewModel()
+) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
+    val username = prefs.getString("username", "Player") ?: "Player"
+    val uiState by viewModel.uiState.collectAsState()
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Objave", "Pratiš")
+    var showNewPostDialog by remember { mutableStateOf(false) }
+    val tabs = listOf("Objave", "Moje")
+    val visiblePosts = if (selectedTab == 0) {
+        uiState.posts
+    } else {
+        uiState.posts.filter { it.userId == viewModel.currentUserId }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundDark)
     ) {
-        // Top bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -79,24 +67,52 @@ fun CommunityScreen(onAddSetupClick: () -> Unit = {}) {
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(SurfaceDark)
-                    .clickable { onAddSetupClick() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = "Dodaj setup",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                IconButton(
+                    onClick = { viewModel.loadPosts() },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceDark)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Osvjezi",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                IconButton(
+                    onClick = { showNewPostDialog = true },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceDark)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Nova objava",
+                        tint = PrimaryPurple,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onAddSetupClick,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceDark)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = "Dodaj setup",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
 
-        // Tabovi
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = BackgroundDark,
@@ -126,25 +142,94 @@ fun CommunityScreen(onAddSetupClick: () -> Unit = {}) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(bottom = 16.dp)
-        ) {
-            items(dummyPosts) { post ->
-                PostItem(post = post)
+        when {
+            uiState.isLoading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = PrimaryPurple)
+                }
             }
-            item {
-                PollItem(poll = dummyPoll)
+            visiblePosts.isEmpty() -> {
+                EmptyCommunityState(
+                    text = if (selectedTab == 0) "Jos nema objava" else "Jos nemas svojih objava",
+                    onNewPostClick = { showNewPostDialog = true }
+                )
+            }
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    items(visiblePosts, key = { it.id }) { post ->
+                        CommunityPostItem(
+                            post = post,
+                            currentUserId = viewModel.currentUserId,
+                            onLikeClick = { viewModel.toggleLike(post) },
+                            onDeleteClick = { viewModel.deletePost(post.id) },
+                            onCommentSend = { comment -> viewModel.addComment(post, username, comment) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showNewPostDialog) {
+        AddCommunityPostDialog(
+            onDismiss = { showNewPostDialog = false },
+            onPost = { content ->
+                viewModel.addPost(content, username)
+                showNewPostDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun EmptyCommunityState(text: String, onNewPostClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Default.People,
+                contentDescription = null,
+                tint = TextHint,
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(text = text, fontSize = 14.sp, color = TextSecondary)
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onNewPostClick,
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Napravi objavu", color = TextPrimary)
             }
         }
     }
 }
 
 @Composable
-fun PostItem(post: Post) {
+fun CommunityPostItem(
+    post: CommunityPostModel,
+    currentUserId: String,
+    onLikeClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onCommentSend: (String) -> Unit
+) {
+    val liked = currentUserId in post.likedBy
+    val isOwner = currentUserId == post.userId
+    var showCommentDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -161,7 +246,7 @@ fun PostItem(post: Post) {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = post.username.first().toString(),
+                    text = post.username.firstOrNull()?.uppercaseChar()?.toString() ?: "P",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryPurple
@@ -176,141 +261,215 @@ fun PostItem(post: Post) {
                     color = TextPrimary
                 )
                 Text(
-                    text = post.timeAgo,
+                    text = formatPostTime(post.createdAt),
                     fontSize = 11.sp,
                     color = TextSecondary
                 )
+            }
+            if (isOwner) {
+                IconButton(onClick = onDeleteClick, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = "Obrisi objavu",
+                        tint = ErrorRed.copy(alpha = 0.8f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        Text(
-            text = post.content,
-            fontSize = 14.sp,
-            color = TextPrimary
-        )
+        Text(text = post.content, fontSize = 14.sp, color = TextPrimary)
 
-        if (post.hasImage) {
+        if (post.imageUrl.isNotBlank()) {
             Spacer(modifier = Modifier.height(10.dp))
-            Box(
+            AsyncImage(
+                model = post.imageUrl,
+                contentDescription = "Slika objave",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(160.dp)
+                    .height(180.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(SurfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Image,
-                    contentDescription = "Slika",
-                    tint = TextHint,
-                    modifier = Modifier.size(40.dp)
-                )
-            }
+                contentScale = ContentScale.Crop
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector = Icons.Default.FavoriteBorder,
+                imageVector = if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                 contentDescription = "Like",
-                tint = TextSecondary,
-                modifier = Modifier.size(18.dp)
+                tint = if (liked) PrimaryPurple else TextSecondary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable { onLikeClick() }
             )
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Text(text = "${post.likes}", fontSize = 13.sp, color = TextSecondary)
             Spacer(modifier = Modifier.width(16.dp))
             Icon(
                 imageVector = Icons.Default.ChatBubbleOutline,
-                contentDescription = "Komentar",
+                contentDescription = "Komentari",
                 tint = TextSecondary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier
+                    .size(18.dp)
+                    .clickable { showCommentDialog = true }
             )
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Text(text = "${post.comments}", fontSize = 13.sp, color = TextSecondary)
         }
+
+        if (post.latestComment.isNotBlank()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = post.latestComment,
+                fontSize = 12.sp,
+                color = TextSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(SurfaceVariant)
+                    .padding(10.dp)
+            )
+        }
+    }
+
+    if (showCommentDialog) {
+        AddCommentDialog(
+            onDismiss = { showCommentDialog = false },
+            onSend = { comment ->
+                onCommentSend(comment)
+                showCommentDialog = false
+            }
+        )
     }
 }
 
 @Composable
-fun PollItem(poll: Poll) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(SurfaceDark)
-            .padding(14.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
+fun AddCommunityPostDialog(
+    onDismiss: () -> Unit,
+    onPost: (String) -> Unit
+) {
+    var content by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceDark,
+        title = {
+            Text(
+                text = "Nova objava",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = content,
+                onValueChange = { content = it },
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(PrimaryPurple.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .height(140.dp),
+                placeholder = { Text("Podijeli gaming trenutak...", color = TextHint) },
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PrimaryPurple,
+                    unfocusedBorderColor = SurfaceVariant,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
+                    cursorColor = PrimaryPurple,
+                    focusedContainerColor = SurfaceVariant,
+                    unfocusedContainerColor = SurfaceVariant
+                )
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { onPost(content) },
+                enabled = content.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
+                shape = RoundedCornerShape(10.dp)
             ) {
-                Text(
-                    text = poll.username.first().toString(),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryPurple
-                )
+                Text("Objavi", color = TextPrimary)
             }
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = poll.username,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
-                )
-                Text(
-                    text = poll.timeAgo,
-                    fontSize = 11.sp,
-                    color = TextSecondary
-                )
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Odustani", color = TextSecondary)
             }
         }
+    )
+}
 
-        Spacer(modifier = Modifier.height(10.dp))
+@Composable
+fun AddCommentDialog(
+    onDismiss: () -> Unit,
+    onSend: (String) -> Unit
+) {
+    var comment by remember { mutableStateOf("") }
 
-        Text(
-            text = poll.question,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        poll.options.forEach { (option, percentage) ->
-            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = option, fontSize = 13.sp, color = TextPrimary)
-                    Text(
-                        text = "${(percentage * 100).toInt()}%",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PrimaryPurple
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                LinearProgressIndicator(
-                    progress = { percentage },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = PrimaryPurple,
-                    trackColor = SurfaceVariant
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceDark,
+        title = {
+            Text(
+                text = "Komentar",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = comment,
+                onValueChange = { comment = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Napisi komentar...", color = TextHint) },
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PrimaryPurple,
+                    unfocusedBorderColor = SurfaceVariant,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
+                    cursorColor = PrimaryPurple,
+                    focusedContainerColor = SurfaceVariant,
+                    unfocusedContainerColor = SurfaceVariant
                 )
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSend(comment) },
+                enabled = comment.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Posalji", color = TextPrimary)
             }
-            Spacer(modifier = Modifier.height(4.dp))
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Odustani", color = TextSecondary)
+            }
         }
+    )
+}
+
+private fun formatPostTime(createdAt: Long): String {
+    if (createdAt <= 0L) return "maloprije"
+    val diff = System.currentTimeMillis() - createdAt
+    val minute = 60_000L
+    val hour = 60 * minute
+    val day = 24 * hour
+
+    return when {
+        diff < minute -> "maloprije"
+        diff < hour -> "prije ${diff / minute} min"
+        diff < day -> "prije ${diff / hour} h"
+        diff < 7 * day -> "prije ${diff / day} d"
+        else -> SimpleDateFormat("dd.MM.yyyy.", Locale.getDefault()).format(Date(createdAt))
     }
 }
