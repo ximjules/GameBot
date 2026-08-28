@@ -1,4 +1,4 @@
-package com.gamebot.app.navigation
+﻿package com.gamebot.app.navigation
 
 import android.content.Context
 import androidx.compose.foundation.layout.padding
@@ -31,13 +31,12 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Home : Screen("home", "Home", Icons.Default.Home)
     object Library : Screen("library", "Library", Icons.Default.VideoLibrary)
     object Community : Screen("community", "Community", Icons.Default.People)
-    object Map : Screen("map", "Mapa", Icons.Default.Place)
-    object Profile : Screen("profile", "Profil", Icons.Default.AccountCircle)
-    object Notes : Screen("notes", "Bilješke", Icons.Default.Book)
-    object Calendar : Screen("calendar", "Događaji", Icons.Default.CalendarToday)
-    object Camera : Screen("camera", "Kamera", Icons.Default.CameraAlt)
+    object Map : Screen("map", "Map", Icons.Default.Place)
+    object Profile : Screen("profile", "Profile", Icons.Default.AccountCircle)
+    object Notes : Screen("notes", "Notes", Icons.Default.Book)
+    object Calendar : Screen("calendar", "Events", Icons.Default.CalendarToday)
+    object Camera : Screen("camera", "Camera", Icons.Default.CameraAlt)
 }
-
 val bottomNavItems = listOf(
     Screen.Home,
     Screen.Library,
@@ -155,9 +154,11 @@ fun GameBotNavigation() {
                 )
             }
             composable(Screen.Home.route) {
-                HomeScreen(onEventClick = {
-                    navController.navigate(Screen.Calendar.route)
-                })
+                HomeScreen(
+                    onEventClick = { navController.navigate(Screen.Calendar.route) },
+                    onLibraryClick = { navController.navigate(Screen.Library.route) },
+                    onCommunityClick = { navController.navigate(Screen.Community.route) }
+                )
             }
             composable(Screen.Library.route) {
                 LibraryScreen(onGameClick = {

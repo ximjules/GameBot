@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,9 +20,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
+import com.gamebot.app.data.FirestoreProvider
 import com.gamebot.app.R
 import com.gamebot.app.ui.theme.*
-import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 
 @Composable
 fun LoginScreen(
@@ -45,8 +46,8 @@ fun LoginScreen(
     ) {
         IconButton(onClick = onBackClick) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
-                contentDescription = "Natrag",
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
                 tint = TextPrimary
             )
         }
@@ -123,7 +124,6 @@ fun LoginScreen(
             singleLine = true
         )
 
-        // Error poruka
         if (errorMessage.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -138,7 +138,7 @@ fun LoginScreen(
         Button(
             onClick = {
                 if (email.isEmpty() || password.isEmpty()) {
-                    errorMessage = "Molimo unesite email i lozinku"
+                    errorMessage = "Please enter email and password"
                     return@Button
                 }
                 isLoading = true
@@ -146,30 +146,41 @@ fun LoginScreen(
                 auth.signInWithEmailAndPassword(email, password)
                     .addOnSuccessListener { result ->
                         val uid = result.user?.uid ?: ""
-                        val db = FirebaseFirestore.getInstance()
+                        val db = FirestoreProvider.db
+                        val fallbackUsername = email.substringBefore("@")
+                        val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
+                        prefs.edit()
+                            .putString("username", fallbackUsername)
+                            .putBoolean("is_logged_in", true)
+                            .apply()
+                        isLoading = false
+                        onLoginSuccess()
+
                         db.collection("users").document(uid).get()
                             .addOnSuccessListener { document ->
-                                val username = document.getString("username") ?: email.substringBefore("@")
-                                val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
-                                prefs.edit()
-                                    .putString("username", username)
-                                    .putBoolean("is_logged_in", true)
-                                    .apply()
-                                isLoading = false
-                                onLoginSuccess()
-                            }
-                            .addOnFailureListener {
-                                val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
-                                prefs.edit()
-                                    .putString("username", email.substringBefore("@"))
-                                    .putBoolean("is_logged_in", true)
-                                    .apply()
-                                isLoading = false
-                                onLoginSuccess()
+                                val username = document.getString("username") ?: fallbackUsername
+                                val userProfile = hashMapOf(
+                                    "username" to username,
+                                    "email" to email,
+                                    "level" to (document.getLong("level") ?: 1),
+                                    "xp" to (document.getLong("xp") ?: 0),
+                                    "games" to (document.getLong("games") ?: 0),
+                                    "trophies" to (document.getLong("trophies") ?: 0),
+                                    "friends" to (document.getLong("friends") ?: 0),
+                                    "createdAt" to (document.getLong("createdAt") ?: System.currentTimeMillis()),
+                                    "lastLoginAt" to System.currentTimeMillis()
+                                )
+                                db.collection("users").document(uid)
+                                    .set(userProfile, SetOptions.merge())
+                                    .addOnSuccessListener {
+                                        prefs.edit()
+                                            .putString("username", username)
+                                            .apply()
+                                    }
                             }
                     }
                     .addOnFailureListener { e ->
-                        errorMessage = "Pogrešan email ili lozinka"
+                        errorMessage = "Wrong email or password"
                         isLoading = false
                     }
             },

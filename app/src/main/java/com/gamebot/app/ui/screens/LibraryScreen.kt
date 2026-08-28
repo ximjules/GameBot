@@ -5,30 +5,34 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.gamebot.app.data.GameModel
-import com.gamebot.app.viewmodel.LibraryViewModel
-import com.gamebot.app.ui.theme.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
+import com.gamebot.app.data.GameModel
+import com.gamebot.app.data.api.RawgApi
+import com.gamebot.app.data.api.RawgGame
+import com.gamebot.app.ui.theme.*
+import com.gamebot.app.viewmodel.LibraryViewModel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -39,7 +43,8 @@ fun LibraryScreen(
     val uiState by viewModel.uiState.collectAsState()
     var selectedTab by remember { mutableStateOf(0) }
     var showAddDialog by remember { mutableStateOf(false) }
-    val tabs = listOf("Sve igre", "Odigrane", "Trenutno igram", "Backlog")
+    var editingGame by remember { mutableStateOf<GameModel?>(null) }
+    val tabs = listOf("All games", "Completed", "Playing", "Backlog")
 
     val filteredGames = when (selectedTab) {
         0 -> uiState.games
@@ -54,7 +59,6 @@ fun LibraryScreen(
             .fillMaxSize()
             .background(BackgroundDark)
     ) {
-        // Top bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -64,7 +68,7 @@ fun LibraryScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Moja biblioteka",
+                text = "My library",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
@@ -79,14 +83,13 @@ fun LibraryScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Dodaj igru",
+                    contentDescription = "Add game",
                     tint = PrimaryPurple,
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
 
-        // Tabovi
         ScrollableTabRow(
             selectedTabIndex = selectedTab,
             containerColor = BackgroundDark,
@@ -118,17 +121,11 @@ fun LibraryScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         if (uiState.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = PrimaryPurple)
             }
         } else if (filteredGames.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         imageVector = Icons.Default.SportsEsports,
@@ -137,11 +134,7 @@ fun LibraryScreen(
                         modifier = Modifier.size(48.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Nema igara — dodaj prvu!",
-                        fontSize = 14.sp,
-                        color = TextSecondary
-                    )
+                    Text(text = "No games yet - add your first one!", fontSize = 14.sp, color = TextSecondary)
                 }
             }
         } else {
@@ -156,6 +149,7 @@ fun LibraryScreen(
                     GameItem(
                         game = game,
                         onClick = onGameClick,
+                        onEdit = { editingGame = game },
                         onDelete = { viewModel.deleteGame(game.id) }
                     )
                 }
@@ -163,7 +157,6 @@ fun LibraryScreen(
         }
     }
 
-    // Dodaj igru dialog
     if (showAddDialog) {
         AddGameDialog(
             onDismiss = { showAddDialog = false },
@@ -173,12 +166,24 @@ fun LibraryScreen(
             }
         )
     }
+
+    editingGame?.let { game ->
+        EditGameDialog(
+            game = game,
+            onDismiss = { editingGame = null },
+            onSave = { updatedGame ->
+                viewModel.updateGame(updatedGame)
+                editingGame = null
+            }
+        )
+    }
 }
 
 @Composable
 fun GameItem(
     game: GameModel,
     onClick: () -> Unit = {},
+    onEdit: () -> Unit = {},
     onDelete: () -> Unit = {}
 ) {
     Row(
@@ -190,7 +195,6 @@ fun GameItem(
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Cover art ili placeholder
         if (game.coverUrl.isNotEmpty()) {
             AsyncImage(
                 model = game.coverUrl,
@@ -209,7 +213,7 @@ fun GameItem(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = game.title.first().toString(),
+                    text = game.title.firstOrNull()?.toString() ?: "?",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryPurple
@@ -224,12 +228,14 @@ fun GameItem(
                 text = game.title,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
+                color = TextPrimary,
+                maxLines = 1
             )
             Text(
-                text = "${game.genre} • ${game.studio}",
+                text = listOf(game.genre, game.studio).filter { it.isNotBlank() }.joinToString(" - "),
                 fontSize = 11.sp,
-                color = TextSecondary
+                color = TextSecondary,
+                maxLines = 1
             )
             Spacer(modifier = Modifier.height(6.dp))
             LinearProgressIndicator(
@@ -254,8 +260,17 @@ fun GameItem(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = "Edit",
+                tint = TextSecondary,
+                modifier = Modifier
+                    .size(18.dp)
+                    .clickable { onEdit() }
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Icon(
                 imageVector = Icons.Default.DeleteOutline,
-                contentDescription = "Obriši",
+                contentDescription = "Delete",
                 tint = ErrorRed.copy(alpha = 0.7f),
                 modifier = Modifier
                     .size(18.dp)
@@ -266,14 +281,85 @@ fun GameItem(
 }
 
 @Composable
+fun EditGameDialog(
+    game: GameModel,
+    onDismiss: () -> Unit,
+    onSave: (GameModel) -> Unit
+) {
+    var title by remember(game.id) { mutableStateOf(game.title) }
+    var genre by remember(game.id) { mutableStateOf(game.genre) }
+    var studio by remember(game.id) { mutableStateOf(game.studio) }
+    var coverUrl by remember(game.id) { mutableStateOf(game.coverUrl) }
+    var progress by remember(game.id) { mutableStateOf((game.progress * 100).toInt().toString()) }
+    var selectedCategory by remember(game.id) { mutableStateOf(game.category) }
+    val categories = listOf("backlog", "playing", "completed")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceDark,
+        title = {
+            Text(text = "Edit game", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                GameTextField(value = title, onValueChange = { title = it }, label = "Game title")
+                GameTextField(value = genre, onValueChange = { genre = it }, label = "Genre")
+                GameTextField(value = studio, onValueChange = { studio = it }, label = "Studio")
+                GameTextField(value = coverUrl, onValueChange = { coverUrl = it }, label = "Cover URL")
+                GameTextField(
+                    value = progress,
+                    onValueChange = { progress = it },
+                    label = "Progress (0-100)",
+                    keyboardType = KeyboardType.Number
+                )
+                CategoryPicker(
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = { selectedCategory = it },
+                    categories = categories
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSave(
+                        game.copy(
+                            title = title.trim(),
+                            genre = genre.trim(),
+                            studio = studio.trim(),
+                            coverUrl = coverUrl.trim(),
+                            progress = progress.percentToProgress(),
+                            category = selectedCategory
+                        )
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
+                shape = RoundedCornerShape(10.dp),
+                enabled = title.isNotBlank()
+            ) {
+                Text("Save", color = TextPrimary)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        }
+    )
+}
+
+@Composable
 fun AddGameDialog(
     onDismiss: () -> Unit,
     onAdd: (GameModel) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var searchResults by remember { mutableStateOf<List<com.gamebot.app.data.api.RawgGame>>(emptyList()) }
+    var searchResults by remember { mutableStateOf<List<RawgGame>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
-    var selectedGame by remember { mutableStateOf<com.gamebot.app.data.api.RawgGame?>(null) }
+    var selectedGame by remember { mutableStateOf<RawgGame?>(null) }
     var progress by remember { mutableStateOf("0") }
     var selectedCategory by remember { mutableStateOf("backlog") }
     val categories = listOf("backlog", "playing", "completed")
@@ -283,29 +369,26 @@ fun AddGameDialog(
         onDismissRequest = onDismiss,
         containerColor = SurfaceDark,
         title = {
-            Text(
-                text = "Dodaj igru",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
+            Text(text = "Add game", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Search polje
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { query ->
                         searchQuery = query
+                        selectedGame = null
                         if (query.length >= 3) {
                             scope.launch {
                                 isSearching = true
                                 try {
-                                    val response = com.gamebot.app.data.api.RawgApi.service
-                                        .searchGames(
-                                            apiKey = com.gamebot.app.data.api.RawgApi.API_KEY,
-                                            query = query
-                                        )
+                                    val response = RawgApi.service.searchGames(
+                                        apiKey = RawgApi.API_KEY,
+                                        query = query
+                                    )
                                     searchResults = response.results
                                 } catch (e: Exception) {
                                     android.util.Log.e("RAWG", "Error: ${e.message}")
@@ -316,18 +399,10 @@ fun AddGameDialog(
                             searchResults = emptyList()
                         }
                     },
-                    label = { Text("Pretraži igru...", color = TextSecondary) },
+                    label = { Text("Search game...", color = TextSecondary) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryPurple,
-                        unfocusedBorderColor = SurfaceVariant,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        cursorColor = PrimaryPurple,
-                        focusedContainerColor = SurfaceVariant,
-                        unfocusedContainerColor = SurfaceVariant
-                    ),
+                    colors = gameTextFieldColors(),
                     trailingIcon = {
                         if (isSearching) {
                             CircularProgressIndicator(
@@ -340,7 +415,6 @@ fun AddGameDialog(
                     singleLine = true
                 )
 
-                // Search rezultati
                 if (searchResults.isNotEmpty() && selectedGame == null) {
                     Column(
                         modifier = Modifier
@@ -349,188 +423,61 @@ fun AddGameDialog(
                             .background(SurfaceVariant)
                     ) {
                         searchResults.take(5).forEach { game ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedGame = game
-                                        searchQuery = game.name
-                                        searchResults = emptyList()
-                                    }
-                                    .padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Cover art
-                                if (game.background_image != null) {
-                                    AsyncImage(
-                                        model = game.background_image,
-                                        contentDescription = game.name,
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(RoundedCornerShape(6.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(BackgroundDark),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = game.name.first().toString(),
-                                            color = PrimaryPurple,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                            SearchResultItem(
+                                game = game,
+                                onSelect = {
+                                    selectedGame = game
+                                    searchQuery = game.name
+                                    searchResults = emptyList()
                                 }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text = game.name,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = TextPrimary,
-                                        maxLines = 1
-                                    )
-                                    Text(
-                                        text = game.genres?.take(2)?.joinToString(", ") { it.name } ?: "Unknown",
-                                        fontSize = 11.sp,
-                                        color = TextSecondary
-                                    )
-                                }
-                            }
-                            if (game != searchResults.last()) {
-                                Divider(color = BackgroundDark, thickness = 0.5.dp)
-                            }
-                        }
-                    }
-                }
-
-                // Odabrana igra preview
-                if (selectedGame != null) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(SurfaceVariant)
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (selectedGame?.background_image != null) {
-                            AsyncImage(
-                                model = selectedGame?.background_image,
-                                contentDescription = selectedGame?.name,
-                                modifier = Modifier
-                                    .size(50.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = selectedGame?.name ?: "",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = selectedGame?.genres?.take(2)?.joinToString(", ") { it.name } ?: "",
-                                fontSize = 11.sp,
-                                color = TextSecondary
-                            )
-                            Text(
-                                text = selectedGame?.developers?.firstOrNull()?.name ?: "",
-                                fontSize = 11.sp,
-                                color = PrimaryPurple
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                selectedGame = null
-                                searchQuery = ""
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Ukloni",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
                 }
 
-                // Napredak
-                OutlinedTextField(
+                selectedGame?.let { game ->
+                    SelectedGamePreview(
+                        game = game,
+                        onRemove = {
+                            selectedGame = null
+                            searchQuery = ""
+                        }
+                    )
+                }
+
+                GameTextField(
                     value = progress,
                     onValueChange = { progress = it },
-                    label = { Text("Napredak (0-100)", color = TextSecondary) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryPurple,
-                        unfocusedBorderColor = SurfaceVariant,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        cursorColor = PrimaryPurple,
-                        focusedContainerColor = SurfaceVariant,
-                        unfocusedContainerColor = SurfaceVariant
-                    ),
-                    singleLine = true
+                    label = "Progress (0-100)",
+                    keyboardType = KeyboardType.Number
                 )
-
-                // Kategorija
-                Text(text = "Kategorija", fontSize = 13.sp, color = TextSecondary)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    categories.forEach { category ->
-                        FilterChip(
-                            selected = selectedCategory == category,
-                            onClick = { selectedCategory = category },
-                            label = {
-                                Text(
-                                    text = when(category) {
-                                        "backlog" -> "Backlog"
-                                        "playing" -> "Igram"
-                                        "completed" -> "Odigrano"
-                                        else -> category
-                                    },
-                                    fontSize = 11.sp
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = PrimaryPurple,
-                                selectedLabelColor = TextPrimary,
-                                containerColor = SurfaceVariant,
-                                labelColor = TextSecondary
-                            )
-                        )
-                    }
-                }
+                CategoryPicker(
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = { selectedCategory = it },
+                    categories = categories
+                )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (selectedGame != null) {
+                    val pickedGame = selectedGame
+                    if (pickedGame != null) {
                         onAdd(
                             GameModel(
-                                title = selectedGame?.name ?: "",
-                                genre = selectedGame?.genres?.take(2)?.joinToString(", ") { it.name } ?: "",
-                                studio = selectedGame?.developers?.firstOrNull()?.name ?: "",
-                                progress = (progress.toFloatOrNull() ?: 0f) / 100f,
+                                title = pickedGame.name,
+                                genre = pickedGame.genres?.take(2)?.joinToString(", ") { it.name } ?: "",
+                                studio = pickedGame.developers?.firstOrNull()?.name ?: "",
+                                progress = progress.percentToProgress(),
                                 category = selectedCategory,
-                                coverUrl = selectedGame?.background_image ?: ""
+                                coverUrl = pickedGame.background_image ?: ""
                             )
                         )
-                    } else if (searchQuery.isNotEmpty()) {
+                    } else if (searchQuery.isNotBlank()) {
                         onAdd(
                             GameModel(
-                                title = searchQuery,
-                                progress = (progress.toFloatOrNull() ?: 0f) / 100f,
+                                title = searchQuery.trim(),
+                                progress = progress.percentToProgress(),
                                 category = selectedCategory
                             )
                         )
@@ -538,15 +485,179 @@ fun AddGameDialog(
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
                 shape = RoundedCornerShape(10.dp),
-                enabled = searchQuery.isNotEmpty()
+                enabled = searchQuery.isNotBlank()
             ) {
-                Text("Dodaj", color = TextPrimary)
+                Text("Add", color = TextPrimary)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Odustani", color = TextSecondary)
+                Text("Cancel", color = TextSecondary)
             }
         }
     )
+}
+
+@Composable
+private fun SearchResultItem(game: RawgGame, onSelect: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect() }
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (game.background_image != null) {
+            AsyncImage(
+                model = game.background_image,
+                contentDescription = game.name,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(6.dp)),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(BackgroundDark),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = game.name.firstOrNull()?.toString() ?: "?",
+                    color = PrimaryPurple,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Column {
+            Text(
+                text = game.name,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                maxLines = 1
+            )
+            Text(
+                text = game.genres?.take(2)?.joinToString(", ") { it.name } ?: "Unknown",
+                fontSize = 11.sp,
+                color = TextSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun SelectedGamePreview(game: RawgGame, onRemove: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(SurfaceVariant)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (game.background_image != null) {
+            AsyncImage(
+                model = game.background_image,
+                contentDescription = game.name,
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = game.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(
+                text = game.genres?.take(2)?.joinToString(", ") { it.name } ?: "",
+                fontSize = 11.sp,
+                color = TextSecondary
+            )
+            Text(
+                text = game.developers?.firstOrNull()?.name ?: "",
+                fontSize = 11.sp,
+                color = PrimaryPurple
+            )
+        }
+        IconButton(onClick = onRemove) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Remove",
+                tint = TextSecondary,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CategoryPicker(
+    selectedCategory: String,
+    onCategorySelected: (String) -> Unit,
+    categories: List<String>
+) {
+    Text(text = "Category", fontSize = 13.sp, color = TextSecondary)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        categories.forEach { category ->
+            FilterChip(
+                selected = selectedCategory == category,
+                onClick = { onCategorySelected(category) },
+                label = {
+                    Text(
+                        text = when (category) {
+                            "backlog" -> "Backlog"
+                            "playing" -> "Playing"
+                            "completed" -> "Completed"
+                            else -> category
+                        },
+                        fontSize = 11.sp
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = PrimaryPurple,
+                    selectedLabelColor = TextPrimary,
+                    containerColor = SurfaceVariant,
+                    labelColor = TextSecondary
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun GameTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    keyboardType: KeyboardType = KeyboardType.Text
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label, color = TextSecondary) },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        colors = gameTextFieldColors(),
+        singleLine = true
+    )
+}
+
+@Composable
+private fun gameTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = PrimaryPurple,
+    unfocusedBorderColor = SurfaceVariant,
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary,
+    cursorColor = PrimaryPurple,
+    focusedContainerColor = SurfaceVariant,
+    unfocusedContainerColor = SurfaceVariant
+)
+
+private fun String.percentToProgress(): Float {
+    return ((toFloatOrNull() ?: 0f) / 100f).coerceIn(0f, 1f)
 }

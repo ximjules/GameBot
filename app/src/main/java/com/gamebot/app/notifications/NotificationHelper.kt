@@ -14,7 +14,7 @@ object NotificationHelper {
 
     private const val CHANNEL_ID = "gamebot_channel"
     private const val CHANNEL_NAME = "GAMEBOT Obavijesti"
-    private const val CHANNEL_DESC = "Obavijesti za gaming događaje i podsjetnike"
+    private const val CHANNEL_DESC = "Gaming event and reminder notifications"
 
     fun createNotificationChannel(context: Context) {
         val channel = NotificationChannel(
@@ -57,15 +57,15 @@ object NotificationHelper {
         try {
             NotificationManagerCompat.from(context).notify(notificationId, notification)
         } catch (e: SecurityException) {
-            android.util.Log.e("NotificationHelper", "Nema dozvole za notifikacije: ${e.message}")
+            android.util.Log.e("NotificationHelper", "No notification permission: ${e.message}")
         }
     }
 
     fun showGameReminderNotification(context: Context, gameName: String) {
         showEventNotification(
             context = context,
-            title = "Vrijeme za igranje! 🎮",
-            message = "Nastavi igrati $gameName",
+            title = "Time to play!",
+            message = "Continue playing $gameName",
             notificationId = 2
         )
     }
@@ -73,7 +73,7 @@ object NotificationHelper {
     fun showNewEventNotification(context: Context, eventName: String, time: String) {
         showEventNotification(
             context = context,
-            title = "Novi događaj: $eventName 🎯",
+            title = "New event: $eventName",
             message = "Počinje u $time — ne zaboravi!",
             notificationId = 3
         )

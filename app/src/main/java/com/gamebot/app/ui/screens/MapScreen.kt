@@ -7,11 +7,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,30 +21,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.gamebot.app.ui.theme.*
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.*
-import com.gamebot.app.ui.theme.*
-
-data class GamingStore(
-    val name: String,
-    val address: String,
-    val distance: String,
-    val lat: Double,
-    val lng: Double
-)
-
-val dummyStores = listOf(
-    GamingStore("Instar Gaming", "Ulica grada Vukovara 269, Zagreb", "3.2 km", 45.7995, 15.9819),
-    GamingStore("Links Gaming", "Avenue Mall, Zagreb", "4.7 km", 45.7867, 15.9787),
-    GamingStore("Sancta Domenica", "Shopping centar Prečko, Zagreb", "6.1 km", 45.7923, 15.9234)
-)
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 
 @SuppressLint("MissingPermission")
 @Composable
 fun MapScreen() {
     val context = LocalContext.current
+    var userLocation by remember { mutableStateOf<LatLng?>(null) }
     var hasLocationPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -55,15 +45,12 @@ fun MapScreen() {
         )
     }
 
-    var userLocation by remember { mutableStateOf<LatLng?>(null) }
-
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         hasLocationPermission = isGranted
     }
 
-    // Dohvati GPS lokaciju korisnika
     LaunchedEffect(hasLocationPermission) {
         if (hasLocationPermission) {
             val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
@@ -77,14 +64,11 @@ fun MapScreen() {
         }
     }
 
-    // Korisnikova lokacija ili Zagreb kao fallback
     val startLocation = userLocation ?: LatLng(45.8150, 15.9819)
-
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(startLocation, 13f)
     }
 
-    // Ažuriraj kameru kad dobijemo pravu lokaciju
     LaunchedEffect(userLocation) {
         userLocation?.let {
             cameraPositionState.position = CameraPosition.fromLatLngZoom(it, 13f)
@@ -95,98 +79,61 @@ fun MapScreen() {
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundDark)
+            .padding(horizontal = 16.dp)
+            .padding(top = 24.dp, bottom = 16.dp)
     ) {
-        // Top bar
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(top = 24.dp, bottom = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Gaming trgovine",
+                text = "Map",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
-            Box(
+            IconButton(
+                onClick = {
+                    if (hasLocationPermission) {
+                        userLocation?.let {
+                            cameraPositionState.position = CameraPosition.fromLatLngZoom(it, 13f)
+                        }
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    }
+                },
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(SurfaceDark),
-                contentAlignment = Alignment.Center
+                    .background(SurfaceDark)
             ) {
                 Icon(
-                    imageVector = Icons.Default.FilterList,
-                    contentDescription = "Filter",
+                    imageVector = Icons.Default.MyLocation,
+                    contentDescription = "My location",
                     tint = TextSecondary,
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
 
-        // Search bar
-        OutlinedTextField(
-            value = "",
-            onValueChange = {},
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            placeholder = {
-                Text("Pretraži lokaciju...", color = TextHint, fontSize = 14.sp)
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Pretraži",
-                    tint = TextSecondary
-                )
-            },
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = PrimaryPurple,
-                unfocusedBorderColor = SurfaceVariant,
-                focusedContainerColor = SurfaceDark,
-                unfocusedContainerColor = SurfaceDark
-            ),
-            singleLine = true
-        )
+        Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Google Mapa
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(280.dp)
-                .padding(horizontal = 16.dp)
+                .height(320.dp)
                 .clip(RoundedCornerShape(16.dp))
         ) {
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
-                properties = MapProperties(
-                    isMyLocationEnabled = hasLocationPermission
-                )
+                properties = MapProperties(isMyLocationEnabled = hasLocationPermission)
             ) {
-                // Korisnikova lokacija marker
                 userLocation?.let {
                     Marker(
                         state = MarkerState(position = it),
-                        title = "Vaša lokacija"
-                    )
-                }
-
-                // Gaming trgovine markeri
-                dummyStores.forEach { store ->
-                    Marker(
-                        state = MarkerState(
-                            position = LatLng(store.lat, store.lng)
-                        ),
-                        title = store.name,
-                        snippet = store.address
+                        title = "Your location"
                     )
                 }
             }
@@ -194,97 +141,30 @@ fun MapScreen() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Lokacija info
-        if (userLocation != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(SurfaceDark)
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.LocationOn,
-                    contentDescription = "Lokacija",
-                    tint = PrimaryPurple,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Prikazujem gaming trgovine u blizini",
-                    fontSize = 13.sp,
-                    color = TextSecondary
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-
-        // Lista trgovina
-        LazyColumn(
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 16.dp)
-        ) {
-            items(dummyStores) { store ->
-                StoreItem(store = store)
-            }
-        }
-    }
-}
-
-@Composable
-fun StoreItem(store: GamingStore) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(SurfaceDark)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(PrimaryPurple.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(SurfaceDark)
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Store,
-                contentDescription = "Trgovina",
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = null,
                 tint = PrimaryPurple,
                 modifier = Modifier.size(22.dp)
             )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
+            Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = store.name,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
-            )
-            Text(
-                text = store.address,
-                fontSize = 11.sp,
+                text = if (hasLocationPermission) {
+                    "The map shows your current location."
+                } else {
+                    "Allow location access to show your position on the map."
+                },
+                fontSize = 13.sp,
                 color = TextSecondary
             )
-            Text(
-                text = store.distance,
-                fontSize = 11.sp,
-                color = PrimaryPurple,
-                fontWeight = FontWeight.SemiBold
-            )
         }
-        Icon(
-            imageVector = Icons.Default.Navigation,
-            contentDescription = "Navigacija",
-            tint = PrimaryPurple,
-            modifier = Modifier.size(22.dp)
-        )
     }
 }

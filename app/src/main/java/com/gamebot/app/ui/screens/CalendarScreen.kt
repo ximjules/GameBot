@@ -1,6 +1,7 @@
 package com.gamebot.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,24 +27,36 @@ import com.gamebot.app.data.EventModel
 import com.gamebot.app.notifications.NotificationHelper
 import com.gamebot.app.ui.theme.*
 import com.gamebot.app.viewmodel.EventViewModel
+import java.time.YearMonth
 
 @Composable
 fun CalendarScreen(viewModel: EventViewModel = viewModel()) {
-    var selectedDay by remember { mutableStateOf(1) }
+    val today = remember { java.time.LocalDate.now() }
+    var selectedMonth by remember { mutableStateOf(YearMonth.from(today)) }
+    var selectedDay by remember { mutableStateOf(today.dayOfMonth.coerceAtMost(selectedMonth.lengthOfMonth())) }
     var showAddDialog by remember { mutableStateOf(false) }
-    val currentMonth = "Lipanj 2026."
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
 
-    val selectedEvents = uiState.events.filter { it.day == selectedDay }
-    val eventDays = uiState.events.map { it.day }
+    val selectedEvents = uiState.events.filter { event ->
+        event.day == selectedDay && event.belongsToMonth(selectedMonth)
+    }
+    val eventDays = uiState.events
+        .filter { it.belongsToMonth(selectedMonth) }
+        .map { it.day }
+        .toSet()
+    val monthNames = remember {
+        listOf(
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        )
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundDark)
     ) {
-        // Top bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -53,29 +66,27 @@ fun CalendarScreen(viewModel: EventViewModel = viewModel()) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Događaji",
+                text = "Events",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
-            Box(
+            IconButton(
+                onClick = { showAddDialog = true },
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(SurfaceDark)
-                    .clickable { showAddDialog = true },
-                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Dodaj događaj",
+                    contentDescription = "Add event",
                     tint = PrimaryPurple,
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
 
-        // Kalendar
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -89,22 +100,38 @@ fun CalendarScreen(viewModel: EventViewModel = viewModel()) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.ChevronLeft,
-                    contentDescription = "Prethodni",
-                    tint = TextSecondary
-                )
+                IconButton(
+                    onClick = {
+                        val newMonth = selectedMonth.minusMonths(1)
+                        selectedMonth = newMonth
+                        selectedDay = selectedDay.coerceAtMost(newMonth.lengthOfMonth())
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ChevronLeft,
+                        contentDescription = "Prethodni mjesec",
+                        tint = TextSecondary
+                    )
+                }
                 Text(
-                    text = currentMonth,
+                    text = "${monthNames[selectedMonth.monthValue - 1]} ${selectedMonth.year}.",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary
                 )
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = "Sljedeći",
-                    tint = TextSecondary
-                )
+                IconButton(
+                    onClick = {
+                        val newMonth = selectedMonth.plusMonths(1)
+                        selectedMonth = newMonth
+                        selectedDay = selectedDay.coerceAtMost(newMonth.lengthOfMonth())
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Sljedeći mjesec",
+                        tint = TextSecondary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -125,36 +152,41 @@ fun CalendarScreen(viewModel: EventViewModel = viewModel()) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            val days = (1..30).toList()
-            days.chunked(7).forEach { week ->
+            val leadingEmptyDays = selectedMonth.atDay(1).dayOfWeek.value - 1
+            val calendarCells = List(leadingEmptyDays) { 0 } + (1..selectedMonth.lengthOfMonth()).toList()
+            calendarCells.chunked(7).forEach { week ->
                 Row(modifier = Modifier.fillMaxWidth()) {
                     week.forEach { day ->
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(1f)
-                                .padding(2.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    when {
-                                        day == selectedDay -> PrimaryPurple
-                                        day in eventDays -> PrimaryPurple.copy(alpha = 0.2f)
-                                        else -> androidx.compose.ui.graphics.Color.Transparent
-                                    }
+                        if (day == 0) {
+                            Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f)
+                                    .padding(2.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        when {
+                                            day == selectedDay -> PrimaryPurple
+                                            day in eventDays -> PrimaryPurple.copy(alpha = 0.2f)
+                                            else -> androidx.compose.ui.graphics.Color.Transparent
+                                        }
+                                    )
+                                    .clickable { selectedDay = day },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = day.toString(),
+                                    fontSize = 12.sp,
+                                    color = when {
+                                        day == selectedDay -> TextPrimary
+                                        day in eventDays -> PrimaryPurple
+                                        else -> TextSecondary
+                                    },
+                                    fontWeight = if (day == selectedDay) FontWeight.Bold else FontWeight.Normal
                                 )
-                                .clickable { selectedDay = day },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = day.toString(),
-                                fontSize = 12.sp,
-                                color = when {
-                                    day == selectedDay -> TextPrimary
-                                    day in eventDays -> PrimaryPurple
-                                    else -> TextSecondary
-                                },
-                                fontWeight = if (day == selectedDay) FontWeight.Bold else FontWeight.Normal
-                            )
+                            }
                         }
                     }
                     repeat(7 - week.size) {
@@ -174,7 +206,11 @@ fun CalendarScreen(viewModel: EventViewModel = viewModel()) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (selectedEvents.isEmpty()) "Nadolazeći događaji" else "Događaji — ${selectedDay}.6.2026.",
+                text = if (selectedEvents.isEmpty()) {
+                    "Events for ${selectedDay}.${selectedMonth.monthValue}.${selectedMonth.year}."
+                } else {
+                    "${selectedEvents.size} event(s) for ${selectedDay}.${selectedMonth.monthValue}.${selectedMonth.year}."
+                },
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
@@ -183,58 +219,39 @@ fun CalendarScreen(viewModel: EventViewModel = viewModel()) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = PrimaryPurple)
-            }
-        } else if (selectedEvents.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(SurfaceDark)
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.EventBusy,
-                        contentDescription = "Nema događaja",
-                        tint = TextHint,
-                        modifier = Modifier.size(36.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Nema događaja ovaj dan",
-                        fontSize = 14.sp,
-                        color = TextSecondary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Klikni + za dodavanje",
-                        fontSize = 12.sp,
-                        color = PrimaryPurple
-                    )
+        uiState.error?.let { error ->
+            Text(
+                text = error,
+                fontSize = 12.sp,
+                color = ErrorRed,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+        }
+
+        when {
+            uiState.isLoading -> {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = PrimaryPurple)
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 16.dp)
-            ) {
-                items(selectedEvents) { event ->
-                    EventDetailItem(
-                        event = event,
-                        context = context,
-                        onDelete = { viewModel.deleteEvent(event.id) }
-                    )
+            selectedEvents.isEmpty() -> EmptyEventDayCard(onAddClick = { showAddDialog = true })
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    items(selectedEvents, key = { it.id }) { event ->
+                        EventDetailItem(
+                            event = event,
+                            context = context,
+                            currentUserId = viewModel.currentUserId,
+                            onJoin = { viewModel.joinPublicEvent(event.id) },
+                            onDelete = { viewModel.deleteEvent(event) }
+                        )
+                    }
                 }
             }
         }
@@ -243,6 +260,7 @@ fun CalendarScreen(viewModel: EventViewModel = viewModel()) {
     if (showAddDialog) {
         AddEventDialog(
             selectedDay = selectedDay,
+            selectedMonth = selectedMonth,
             onDismiss = { showAddDialog = false },
             onAdd = { event ->
                 viewModel.addEvent(event)
@@ -253,8 +271,36 @@ fun CalendarScreen(viewModel: EventViewModel = viewModel()) {
 }
 
 @Composable
+private fun EmptyEventDayCard(onAddClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(SurfaceDark)
+            .clickable { onAddClick() }
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Default.EventBusy,
+                contentDescription = "No events",
+                tint = TextHint,
+                modifier = Modifier.size(36.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = "No events for this day", fontSize = 14.sp, color = TextSecondary)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = "Tap to add one", fontSize = 12.sp, color = PrimaryPurple)
+        }
+    }
+}
+
+@Composable
 fun AddEventDialog(
     selectedDay: Int,
+    selectedMonth: YearMonth,
     onDismiss: () -> Unit,
     onAdd: (EventModel) -> Unit
 ) {
@@ -262,13 +308,14 @@ fun AddEventDialog(
     var time by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var participants by remember { mutableStateOf("1") }
+    var isPublic by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SurfaceDark,
         title = {
             Text(
-                text = "Dodaj događaj",
+                text = "Add event",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
@@ -279,100 +326,91 @@ fun AddEventDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Naziv događaja", color = TextSecondary) },
+                    label = { Text("Event title", color = TextSecondary) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryPurple,
-                        unfocusedBorderColor = SurfaceVariant,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        cursorColor = PrimaryPurple,
-                        focusedContainerColor = SurfaceVariant,
-                        unfocusedContainerColor = SurfaceVariant
-                    ),
+                    colors = eventTextFieldColors(),
                     singleLine = true
                 )
                 OutlinedTextField(
                     value = time,
                     onValueChange = { time = it },
-                    label = { Text("Vrijeme (npr. 20:00 - 23:00)", color = TextSecondary) },
+                    label = { Text("Time (e.g. 20:00 - 23:00)", color = TextSecondary) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryPurple,
-                        unfocusedBorderColor = SurfaceVariant,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        cursorColor = PrimaryPurple,
-                        focusedContainerColor = SurfaceVariant,
-                        unfocusedContainerColor = SurfaceVariant
-                    ),
+                    colors = eventTextFieldColors(),
                     singleLine = true
                 )
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Opis", color = TextSecondary) },
+                    label = { Text("Description", color = TextSecondary) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(80.dp),
                     shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryPurple,
-                        unfocusedBorderColor = SurfaceVariant,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        cursorColor = PrimaryPurple,
-                        focusedContainerColor = SurfaceVariant,
-                        unfocusedContainerColor = SurfaceVariant
-                    )
+                    colors = eventTextFieldColors()
                 )
                 OutlinedTextField(
                     value = participants,
                     onValueChange = { participants = it },
-                    label = { Text("Broj sudionika", color = TextSecondary) },
+                    label = { Text("Participant limit", color = TextSecondary) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryPurple,
-                        unfocusedBorderColor = SurfaceVariant,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        cursorColor = PrimaryPurple,
-                        focusedContainerColor = SurfaceVariant,
-                        unfocusedContainerColor = SurfaceVariant
-                    ),
+                    colors = eventTextFieldColors(),
                     singleLine = true
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Public event", fontSize = 13.sp, color = TextPrimary)
+                        Text(
+                            text = "Other users can see it and join",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+                    Switch(
+                        checked = isPublic,
+                        onCheckedChange = { isPublic = it },
+                        colors = SwitchDefaults.colors(checkedThumbColor = PrimaryPurple)
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (title.isNotEmpty()) {
+                    if (title.isNotBlank()) {
                         onAdd(
                             EventModel(
-                                title = title,
-                                date = "${selectedDay}.6.2026.",
-                                time = time,
-                                description = description,
+                                title = title.trim(),
+                                date = "${selectedDay}.${selectedMonth.monthValue}.${selectedMonth.year}.",
+                                time = time.trim(),
+                                description = description.trim(),
                                 participants = participants.toIntOrNull() ?: 1,
-                                day = selectedDay
+                                day = selectedDay,
+                                month = selectedMonth.monthValue,
+                                year = selectedMonth.year,
+                                isPublic = isPublic
                             )
                         )
                     }
                 },
+                enabled = title.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Dodaj", color = TextPrimary)
+                Text("Add", color = TextPrimary)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Odustani", color = TextSecondary)
+                Text("Cancel", color = TextSecondary)
             }
         }
     )
@@ -382,8 +420,13 @@ fun AddEventDialog(
 fun EventDetailItem(
     event: EventModel,
     context: android.content.Context,
+    currentUserId: String,
+    onJoin: () -> Unit = {},
     onDelete: () -> Unit = {}
 ) {
+    val isOwner = event.userId == currentUserId
+    val hasJoined = currentUserId in event.joinedBy
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -397,6 +440,20 @@ fun EventDetailItem(
             fontWeight = FontWeight.Bold,
             color = TextPrimary
         )
+        Spacer(modifier = Modifier.height(6.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (event.isPublic) PrimaryPurple.copy(alpha = 0.16f) else SurfaceVariant)
+                .padding(horizontal = 8.dp, vertical = 3.dp)
+        ) {
+            Text(
+                text = if (event.isPublic) "Public event" else "Private event",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (event.isPublic) PrimaryPurple else TextSecondary
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -407,23 +464,21 @@ fun EventDetailItem(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(text = event.date, fontSize = 12.sp, color = TextSecondary)
-            Spacer(modifier = Modifier.width(16.dp))
-            Icon(
-                imageVector = Icons.Default.AccessTime,
-                contentDescription = "Vrijeme",
-                tint = PrimaryPurple,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(text = event.time, fontSize = 12.sp, color = TextSecondary)
+            if (event.time.isNotBlank()) {
+                Spacer(modifier = Modifier.width(16.dp))
+                Icon(
+                    imageVector = Icons.Default.AccessTime,
+                    contentDescription = "Time",
+                    tint = PrimaryPurple,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = event.time, fontSize = 12.sp, color = TextSecondary)
+            }
         }
         Spacer(modifier = Modifier.height(8.dp))
         if (event.description.isNotEmpty()) {
-            Text(
-                text = event.description,
-                fontSize = 13.sp,
-                color = TextSecondary
-            )
+            Text(text = event.description, fontSize = 13.sp, color = TextSecondary)
             Spacer(modifier = Modifier.height(12.dp))
         }
         Row(
@@ -440,21 +495,38 @@ fun EventDetailItem(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "+${event.participants} sudionika",
+                    text = if (event.isPublic) {
+                        "${event.joinedBy.size} joined / ${event.participants} spots"
+                    } else {
+                        "${event.participants} participants"
+                    },
                     fontSize = 12.sp,
                     color = TextSecondary
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = onDelete,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
-                    border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Text(text = "Izbriši", fontSize = 12.sp, color = ErrorRed)
+                if (isOwner) {
+                    OutlinedButton(
+                        onClick = onDelete,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
+                        border = BorderStroke(1.dp, ErrorRed),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text(text = "Delete", fontSize = 12.sp, color = ErrorRed)
+                    }
+                }
+                if (event.isPublic && !isOwner && !hasJoined) {
+                    Button(
+                        onClick = onJoin,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text(text = "Join", fontSize = 12.sp, color = TextPrimary)
+                    }
                 }
                 Button(
                     onClick = {
@@ -469,10 +541,27 @@ fun EventDetailItem(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
-                    Text(text = "Podsjetnik 🔔", fontSize = 12.sp, color = TextPrimary)
+                    Text(text = "Reminder", fontSize = 12.sp, color = TextPrimary)
                 }
             }
         }
     }
 }
 
+@Composable
+private fun eventTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = PrimaryPurple,
+    unfocusedBorderColor = SurfaceVariant,
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary,
+    cursorColor = PrimaryPurple,
+    focusedContainerColor = SurfaceVariant,
+    unfocusedContainerColor = SurfaceVariant
+)
+
+private fun EventModel.belongsToMonth(month: YearMonth): Boolean {
+    if (this.month > 0 && this.year > 0) {
+        return this.month == month.monthValue && this.year == month.year
+    }
+    return this.date.endsWith(".${month.monthValue}.${month.year}.")
+}

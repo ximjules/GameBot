@@ -1,6 +1,7 @@
 package com.gamebot.app.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,7 +31,6 @@ fun WelcomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Logo
         Image(
             painter = painterResource(id = R.drawable.logo),
             contentDescription = "GameBot Logo",
@@ -39,7 +39,6 @@ fun WelcomeScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Naziv
         Text(
             text = "GAMEBOT",
             fontSize = 32.sp,
@@ -50,9 +49,8 @@ fun WelcomeScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Podnaslov
         Text(
-            text = "Dobrodošli u GAMEBOT!",
+            text = "Welcome to GAMEBOT!",
             fontSize = 16.sp,
             color = TextSecondary,
             textAlign = TextAlign.Center
@@ -60,7 +58,6 @@ fun WelcomeScreen(
 
         Spacer(modifier = Modifier.height(60.dp))
 
-        // Login gumb
         Button(
             onClick = onLoginClick,
             modifier = Modifier
@@ -87,7 +84,6 @@ fun WelcomeScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Sign Up gumb
         OutlinedButton(
             onClick = onSignUpClick,
             modifier = Modifier
@@ -95,9 +91,7 @@ fun WelcomeScreen(
                 .height(52.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-            border = ButtonDefaults.outlinedButtonBorder.copy(
-                width = 1.dp
-            )
+            border = BorderStroke(1.dp, SurfaceVariant)
         ) {
             Text(
                 text = "Sign Up",
@@ -109,7 +103,6 @@ fun WelcomeScreen(
 
         Spacer(modifier = Modifier.height(40.dp))
 
-        // Platforme tekst
         Text(
             text = "Use an existing account",
             fontSize = 13.sp,
@@ -118,7 +111,6 @@ fun WelcomeScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Platforme ikone
         Row(
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically

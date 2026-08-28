@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gamebot.app.data.GameModel
 import com.gamebot.app.data.GameRepository
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -27,7 +26,7 @@ class LibraryViewModel : ViewModel() {
 
     fun loadGames() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             val games = repository.getGames()
             _uiState.value = _uiState.value.copy(
                 games = games,
@@ -38,26 +37,57 @@ class LibraryViewModel : ViewModel() {
 
     fun addGame(game: GameModel) {
         viewModelScope.launch {
-            repository.addGame(game)
-            // Malo pričekamo da Firestore spremi
-            delay(1500)
-            loadGames()
+            val success = repository.addGame(game)
+            if (success) {
+                loadGames()
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "Igra nije spremljena."
+                )
+            }
         }
     }
 
     fun deleteGame(gameId: String) {
         viewModelScope.launch {
-            repository.deleteGame(gameId)
-            delay(1000)
-            loadGames()
+            val success = repository.deleteGame(gameId)
+            if (success) {
+                loadGames()
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "Igra nije obrisana."
+                )
+            }
         }
     }
 
     fun updateProgress(game: GameModel, newProgress: Float) {
         viewModelScope.launch {
-            repository.updateGame(game.copy(progress = newProgress))
-            delay(1000)
-            loadGames()
+            val success = repository.updateGame(game.copy(progress = newProgress))
+            if (success) {
+                loadGames()
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "Progress was not updated."
+                )
+            }
+        }
+    }
+
+    fun updateGame(game: GameModel) {
+        viewModelScope.launch {
+            val success = repository.updateGame(game)
+            if (success) {
+                loadGames()
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "Igra nije azurirana."
+                )
+            }
         }
     }
 }

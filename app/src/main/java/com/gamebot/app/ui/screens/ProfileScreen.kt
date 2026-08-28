@@ -41,7 +41,6 @@ fun ProfileScreen(
             .background(BackgroundDark)
             .verticalScroll(rememberScrollState())
     ) {
-        // Top bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -51,7 +50,7 @@ fun ProfileScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Profil",
+                text = "Profile",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
@@ -60,7 +59,6 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Profil kartica
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -101,35 +99,33 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Statistike s pravim podacima
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                ProfileStat(value = uiState.totalGames.toString(), label = "Igre")
-                Divider(
-                    modifier = Modifier.height(30.dp).width(1.dp),
+                ProfileStat(value = uiState.totalGames.toString(), label = "Games")
+                VerticalDivider(
+                    modifier = Modifier.height(30.dp),
                     color = SurfaceVariant
                 )
                 ProfileStat(value = uiState.backlogCount.toString(), label = "Backlog")
-                Divider(
-                    modifier = Modifier.height(30.dp).width(1.dp),
+                VerticalDivider(
+                    modifier = Modifier.height(30.dp),
                     color = SurfaceVariant
                 )
-                ProfileStat(value = uiState.completedCount.toString(), label = "Odigrano")
+                ProfileStat(value = uiState.completedCount.toString(), label = "Completed")
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Menu opcije - samo funkcionalne
         Column(
             modifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             ProfileMenuItem(
                 icon = Icons.AutoMirrored.Filled.ExitToApp,
-                title = "Odjava",
+                title = "Logout",
                 onClick = {
                     FirebaseAuth.getInstance().signOut()
                     val editPrefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)

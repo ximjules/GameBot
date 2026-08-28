@@ -46,7 +46,7 @@ class CommunityViewModel : ViewModel() {
             } else {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = "Objava nije spremljena. Provjeri prijavu i internet."
+                    error = "Post was not saved. Check login and internet connection."
                 )
             }
         }

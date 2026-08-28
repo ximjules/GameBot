@@ -77,7 +77,7 @@ fun CommunityScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Osvjezi",
+                        contentDescription = "Osvježi",
                         tint = TextSecondary,
                         modifier = Modifier.size(20.dp)
                     )
@@ -105,7 +105,7 @@ fun CommunityScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CameraAlt,
-                        contentDescription = "Dodaj setup",
+                        contentDescription = "Add setup",
                         tint = TextSecondary,
                         modifier = Modifier.size(20.dp)
                     )
@@ -142,6 +142,15 @@ fun CommunityScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        uiState.error?.let { error ->
+            Text(
+                text = error,
+                fontSize = 12.sp,
+                color = ErrorRed,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+        }
+
         when {
             uiState.isLoading -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -150,7 +159,7 @@ fun CommunityScreen(
             }
             visiblePosts.isEmpty() -> {
                 EmptyCommunityState(
-                    text = if (selectedTab == 0) "Jos nema objava" else "Jos nemas svojih objava",
+                    text = if (selectedTab == 0) "No posts yet" else "You do not have posts yet",
                     onNewPostClick = { showNewPostDialog = true }
                 )
             }
@@ -270,7 +279,7 @@ fun CommunityPostItem(
                 IconButton(onClick = onDeleteClick, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = Icons.Default.DeleteOutline,
-                        contentDescription = "Obrisi objavu",
+                        contentDescription = "Obriši objavu",
                         tint = ErrorRed.copy(alpha = 0.8f),
                         modifier = Modifier.size(18.dp)
                     )
@@ -312,7 +321,7 @@ fun CommunityPostItem(
             Spacer(modifier = Modifier.width(16.dp))
             Icon(
                 imageVector = Icons.Default.ChatBubbleOutline,
-                contentDescription = "Komentari",
+                contentDescription = "Comments",
                 tint = TextSecondary,
                 modifier = Modifier
                     .size(18.dp)
@@ -373,7 +382,7 @@ fun AddCommunityPostDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(140.dp),
-                placeholder = { Text("Podijeli gaming trenutak...", color = TextHint) },
+                placeholder = { Text("Share a gaming moment...", color = TextHint) },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = PrimaryPurple,
@@ -393,12 +402,12 @@ fun AddCommunityPostDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Objavi", color = TextPrimary)
+                Text("Post", color = TextPrimary)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Odustani", color = TextSecondary)
+                Text("Cancel", color = TextSecondary)
             }
         }
     )
@@ -416,7 +425,7 @@ fun AddCommentDialog(
         containerColor = SurfaceDark,
         title = {
             Text(
-                text = "Komentar",
+                text = "Comment",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
@@ -427,7 +436,7 @@ fun AddCommentDialog(
                 value = comment,
                 onValueChange = { comment = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Napisi komentar...", color = TextHint) },
+                placeholder = { Text("Write a comment...", color = TextHint) },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = PrimaryPurple,
@@ -447,12 +456,12 @@ fun AddCommentDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Posalji", color = TextPrimary)
+                Text("Pošalji", color = TextPrimary)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Odustani", color = TextSecondary)
+                Text("Cancel", color = TextSecondary)
             }
         }
     )

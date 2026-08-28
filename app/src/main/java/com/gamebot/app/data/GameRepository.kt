@@ -1,8 +1,9 @@
-package com.gamebot.app.data
+﻿package com.gamebot.app.data
 
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class GameModel(
     val id: String = "",
@@ -16,7 +17,7 @@ data class GameModel(
 )
 
 class GameRepository {
-    private val db = FirebaseFirestore.getInstance()
+    private val db = FirestoreProvider.db
     private val auth = FirebaseAuth.getInstance()
 
     private fun getUserGamesRef() = db.collection("users")
@@ -25,22 +26,21 @@ class GameRepository {
 
     suspend fun getGames(): List<GameModel> {
         return try {
-            val uid = auth.currentUser?.uid
-            android.util.Log.d("GameRepo", "getGames UID: $uid")
-            val result = getUserGamesRef().get().await()
-            android.util.Log.d("GameRepo", "getGames count: ${result.documents.size}")
-            result.documents.map { doc ->
-                GameModel(
-                    id = doc.id,
-                    title = doc.getString("title") ?: "",
-                    genre = doc.getString("genre") ?: "",
-                    studio = doc.getString("studio") ?: "",
-                    progress = (doc.getDouble("progress") ?: 0.0).toFloat(),
-                    category = doc.getString("category") ?: "backlog",
-                    coverUrl = doc.getString("coverUrl") ?: "",
-                    addedAt = doc.getLong("addedAt") ?: 0L
-                )
-            }
+            withTimeoutOrNull(10000) {
+                val result = getUserGamesRef().get().await()
+                result.documents.map { doc ->
+                    GameModel(
+                        id = doc.id,
+                        title = doc.getString("title") ?: "",
+                        genre = doc.getString("genre") ?: "",
+                        studio = doc.getString("studio") ?: "",
+                        progress = (doc.getDouble("progress") ?: 0.0).toFloat(),
+                        category = doc.getString("category") ?: "backlog",
+                        coverUrl = doc.getString("coverUrl") ?: "",
+                        addedAt = doc.getLong("addedAt") ?: 0L
+                    )
+                }
+            } ?: emptyList()
         } catch (e: Exception) {
             android.util.Log.e("GameRepo", "getGames error: ${e.message}")
             emptyList()
@@ -48,9 +48,8 @@ class GameRepository {
     }
 
     suspend fun addGame(game: GameModel): Boolean {
+        auth.currentUser?.uid ?: return false
         return try {
-            val uid = auth.currentUser?.uid
-            android.util.Log.d("GameRepo", "addGame UID: $uid")
             val gameMap = hashMapOf(
                 "title" to game.title,
                 "genre" to game.genre,
@@ -60,9 +59,11 @@ class GameRepository {
                 "coverUrl" to game.coverUrl,
                 "addedAt" to game.addedAt
             )
-            getUserGamesRef().add(gameMap)
-            android.util.Log.d("GameRepo", "Igra poslana u Firestore!")
-            true
+            withTimeoutOrNull(30000) {
+                ensureUserProfile(auth.currentUser?.uid ?: return@withTimeoutOrNull false)
+                getUserGamesRef().add(gameMap).await()
+                true
+            } ?: false
         } catch (e: Exception) {
             android.util.Log.e("GameRepo", "addGame error: ${e.message}")
             false
@@ -70,6 +71,7 @@ class GameRepository {
     }
 
     suspend fun updateGame(game: GameModel): Boolean {
+        if (game.id.isBlank()) return false
         return try {
             val gameMap = hashMapOf(
                 "title" to game.title,
@@ -80,9 +82,10 @@ class GameRepository {
                 "coverUrl" to game.coverUrl,
                 "addedAt" to game.addedAt
             )
-            getUserGamesRef().document(game.id).set(gameMap)
-            android.util.Log.d("GameRepo", "Igra ažurirana!")
-            true
+            withTimeoutOrNull(30000) {
+                getUserGamesRef().document(game.id).set(gameMap).await()
+                true
+            } ?: false
         } catch (e: Exception) {
             android.util.Log.e("GameRepo", "updateGame error: ${e.message}")
             false
@@ -90,13 +93,26 @@ class GameRepository {
     }
 
     suspend fun deleteGame(gameId: String): Boolean {
+        if (gameId.isBlank()) return false
         return try {
-            getUserGamesRef().document(gameId).delete()
-            android.util.Log.d("GameRepo", "Igra obrisana!")
-            true
+            withTimeoutOrNull(30000) {
+                getUserGamesRef().document(gameId).delete().await()
+                true
+            } ?: false
         } catch (e: Exception) {
             android.util.Log.e("GameRepo", "deleteGame error: ${e.message}")
             false
         }
+    }
+
+    private suspend fun ensureUserProfile(uid: String) {
+        db.collection("users").document(uid).set(
+            mapOf(
+                "email" to (auth.currentUser?.email ?: ""),
+                "username" to (auth.currentUser?.email?.substringBefore("@") ?: "Player"),
+                "updatedAt" to System.currentTimeMillis()
+            ),
+            SetOptions.merge()
+        ).await()
     }
 }

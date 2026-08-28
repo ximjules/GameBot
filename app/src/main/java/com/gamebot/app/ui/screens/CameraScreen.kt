@@ -1,9 +1,10 @@
-package com.gamebot.app.ui.screens
+﻿package com.gamebot.app.ui.screens
 
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,16 +29,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
+import com.gamebot.app.data.FirestoreProvider
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
 import com.gamebot.app.ui.theme.*
 import java.io.File
 import java.text.SimpleDateFormat
@@ -77,7 +78,6 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
             .background(BackgroundDark)
             .verticalScroll(rememberScrollState())
     ) {
-        // Top bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -87,14 +87,14 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
         ) {
             IconButton(onClick = onBackClick) {
                 Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Natrag",
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
                     tint = TextPrimary
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Dodaj setup",
+                text = "Add setup",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
@@ -104,7 +104,6 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
         Spacer(modifier = Modifier.height(16.dp))
 
         if (!hasCameraPermission) {
-            // Nema dozvole
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -117,13 +116,13 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         imageVector = Icons.Default.CameraAlt,
-                        contentDescription = "Kamera",
+                        contentDescription = "Camera",
                         tint = TextHint,
                         modifier = Modifier.size(48.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Potrebna je dozvola za kameru",
+                        text = "Camera permission is required",
                         fontSize = 14.sp,
                         color = TextSecondary
                     )
@@ -132,19 +131,17 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
                         onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple)
                     ) {
-                        Text("Dozvoli kameru", color = TextPrimary)
+                        Text("Allow camera", color = TextPrimary)
                     }
                 }
             }
         } else if (capturedImageUri == null) {
-            // Kamera preview
             CameraPreview(
                 onImageCaptured = { uri ->
                     capturedImageUri = uri
                 }
             )
         } else {
-            // Pregled snimljene slike
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -154,11 +151,10 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
             ) {
                 AsyncImage(
                     model = capturedImageUri,
-                    contentDescription = "Snimljeni setup",
+                    contentDescription = "Captured setup",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-                // Retake gumb
                 IconButton(
                     onClick = { capturedImageUri = null },
                     modifier = Modifier
@@ -169,7 +165,7 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Ponovi",
+                        contentDescription = "Retake",
                         tint = TextPrimary
                     )
                 }
@@ -178,15 +174,14 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Forma za unos
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            Text(text = "Naziv setupa", fontSize = 13.sp, color = TextSecondary)
+            Text(text = "Setup title", fontSize = 13.sp, color = TextSecondary)
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = setupName,
                 onValueChange = { setupName = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Npr. Moj gaming kutak", color = TextHint, fontSize = 14.sp) },
+                placeholder = { Text("Example: My gaming corner", color = TextHint, fontSize = 14.sp) },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = PrimaryPurple,
@@ -202,7 +197,7 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(text = "Specifikacije", fontSize = 13.sp, color = TextSecondary)
+            Text(text = "Specifications", fontSize = 13.sp, color = TextSecondary)
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = setupSpecs,
@@ -210,7 +205,7 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(100.dp),
-                placeholder = { Text("Napiši svoje specifikacije...", color = TextHint, fontSize = 14.sp) },
+                placeholder = { Text("Write your specifications...", color = TextHint, fontSize = 14.sp) },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = PrimaryPurple,
@@ -225,7 +220,6 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Upload gumb
             if (uploadSuccess) {
                 Box(
                     modifier = Modifier
@@ -236,7 +230,7 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "✅ Setup uspješno objavljen!",
+                        text = "Setup published successfully!",
                         fontSize = 14.sp,
                         color = SuccessGreen,
                         fontWeight = FontWeight.SemiBold
@@ -247,7 +241,7 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
                     onClick = {
                         if (capturedImageUri != null && setupName.isNotEmpty()) {
                             isUploading = true
-                            uploadSetup(
+                            publishSetup(
                                 context = context,
                                 imageUri = capturedImageUri!!,
                                 setupName = setupName,
@@ -279,7 +273,7 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
                         )
                     } else {
                         Text(
-                            text = "Objavi setup",
+                            text = "Publish setup",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
@@ -292,7 +286,6 @@ fun CameraScreen(onBackClick: () -> Unit = {}) {
         }
     }
 }
-
 @Composable
 fun CameraPreview(onImageCaptured: (Uri) -> Unit) {
     val context = LocalContext.current
@@ -324,7 +317,7 @@ fun CameraPreview(onImageCaptured: (Uri) -> Unit) {
                             imageCapture
                         )
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        android.util.Log.e("CameraScreen", "Camera binding failed: ${e.message}")
                     }
                 }, ContextCompat.getMainExecutor(ctx))
                 previewView
@@ -332,11 +325,10 @@ fun CameraPreview(onImageCaptured: (Uri) -> Unit) {
             modifier = Modifier.fillMaxSize()
         )
 
-        // Gumb za snimanje
         IconButton(
             onClick = {
                 val photoFile = File(
-                    context.cacheDir,
+                    context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: context.filesDir,
                     SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault())
                         .format(System.currentTimeMillis()) + ".jpg"
                 )
@@ -349,7 +341,7 @@ fun CameraPreview(onImageCaptured: (Uri) -> Unit) {
                             onImageCaptured(Uri.fromFile(photoFile))
                         }
                         override fun onError(exception: ImageCaptureException) {
-                            exception.printStackTrace()
+                            android.util.Log.e("CameraScreen", "Image capture failed: ${exception.message}")
                         }
                     }
                 )
@@ -363,7 +355,7 @@ fun CameraPreview(onImageCaptured: (Uri) -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.Default.CameraAlt,
-                contentDescription = "Snimi",
+                contentDescription = "Capture",
                 tint = TextPrimary,
                 modifier = Modifier.size(28.dp)
             )
@@ -371,7 +363,7 @@ fun CameraPreview(onImageCaptured: (Uri) -> Unit) {
     }
 }
 
-fun uploadSetup(
+fun publishSetup(
     context: Context,
     imageUri: Uri,
     setupName: String,
@@ -388,46 +380,41 @@ fun uploadSetup(
     val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
     val username = prefs.getString("username", auth.currentUser?.email?.substringBefore("@") ?: "Player")
         ?: "Player"
-    val storage = FirebaseStorage.getInstance()
-    val storageRef = storage.reference
-        .child("setups/$uid/${System.currentTimeMillis()}.jpg")
+    val db = FirestoreProvider.db
+    val localImageUri = imageUri.toString()
+    val setup = hashMapOf(
+        "userId" to uid,
+        "name" to setupName,
+        "specs" to setupSpecs,
+        "imageUrl" to localImageUri,
+        "imageStorage" to "local",
+        "createdAt" to System.currentTimeMillis()
+    )
 
-    storageRef.putFile(imageUri)
-        .addOnSuccessListener { taskSnapshot ->
-            storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
-                val db = FirebaseFirestore.getInstance()
-                val setup = hashMapOf(
-                    "userId" to uid,
-                    "name" to setupName,
-                    "specs" to setupSpecs,
-                    "imageUrl" to downloadUrl.toString(),
-                    "createdAt" to System.currentTimeMillis()
-                )
-                db.collection("setups").add(setup)
-                    .addOnSuccessListener {
-                        val postText = buildString {
-                            append(setupName)
-                            if (setupSpecs.isNotBlank()) {
-                                append("\n\n")
-                                append(setupSpecs)
-                            }
-                        }
-                        val post = hashMapOf(
-                            "userId" to uid,
-                            "username" to username,
-                            "content" to postText,
-                            "imageUrl" to downloadUrl.toString(),
-                            "createdAt" to System.currentTimeMillis(),
-                            "likedBy" to emptyList<String>(),
-                            "comments" to 0,
-                            "latestComment" to ""
-                        )
-                        db.collection("communityPosts").add(post)
-                            .addOnSuccessListener { onSuccess() }
-                            .addOnFailureListener { onFailure() }
-                    }
-                    .addOnFailureListener { onFailure() }
+    db.collection("setups").add(setup)
+        .addOnSuccessListener {
+            val postText = buildString {
+                append(setupName)
+                if (setupSpecs.isNotBlank()) {
+                    append("\n\n")
+                    append(setupSpecs)
+                }
+                append("\n\nImage is saved locally on this device.")
             }
+            val post = hashMapOf(
+                "userId" to uid,
+                "username" to username,
+                "content" to postText,
+                "imageUrl" to localImageUri,
+                "imageStorage" to "local",
+                "createdAt" to System.currentTimeMillis(),
+                "likedBy" to emptyList<String>(),
+                "comments" to 0,
+                "latestComment" to ""
+            )
+            db.collection("communityPosts").add(post)
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { onFailure() }
         }
         .addOnFailureListener { onFailure() }
 }

@@ -9,7 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,8 +21,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.gamebot.app.data.FirestoreProvider
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.gamebot.app.R
 import com.gamebot.app.ui.theme.*
 
@@ -39,7 +39,7 @@ fun SignUpScreen(
     var isLoading by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val auth = FirebaseAuth.getInstance()
-    val db = FirebaseFirestore.getInstance()
+    val db = FirestoreProvider.db
 
     Column(
         modifier = Modifier
@@ -51,8 +51,8 @@ fun SignUpScreen(
     ) {
         IconButton(onClick = onBackClick) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
-                contentDescription = "Natrag",
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
                 tint = TextPrimary
             )
         }
@@ -86,7 +86,6 @@ fun SignUpScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Username
         Text(text = "Username", fontSize = 13.sp, color = TextSecondary)
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
@@ -108,7 +107,6 @@ fun SignUpScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Email
         Text(text = "Email", fontSize = 13.sp, color = TextSecondary)
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
@@ -131,7 +129,6 @@ fun SignUpScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Password
         Text(text = "Password", fontSize = 13.sp, color = TextSecondary)
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
@@ -155,7 +152,6 @@ fun SignUpScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Password again
         Text(text = "Password again", fontSize = 13.sp, color = TextSecondary)
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
@@ -177,7 +173,6 @@ fun SignUpScreen(
             singleLine = true
         )
 
-        // Error poruka
         if (errorMessage.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -193,13 +188,13 @@ fun SignUpScreen(
             onClick = {
                 when {
                     username.isEmpty() || email.isEmpty() || password.isEmpty() -> {
-                        errorMessage = "Molimo ispunite sva polja"
+                        errorMessage = "Please fill in all fields"
                     }
                     password != passwordAgain -> {
-                        errorMessage = "Lozinke se ne podudaraju"
+                        errorMessage = "Passwords do not match"
                     }
                     password.length < 6 -> {
-                        errorMessage = "Lozinka mora imati najmanje 6 znakova"
+                        errorMessage = "Password must be at least 6 characters"
                     }
                     else -> {
                         isLoading = true
@@ -207,7 +202,6 @@ fun SignUpScreen(
                         auth.createUserWithEmailAndPassword(email, password)
                             .addOnSuccessListener { result ->
                                 val uid = result.user?.uid ?: ""
-                                // Spremi korisnika u Firestore
                                 val user = hashMapOf(
                                     "username" to username,
                                     "email" to email,
@@ -220,20 +214,24 @@ fun SignUpScreen(
                                 )
                                 db.collection("users").document(uid)
                                     .set(user)
-
-                                // Ne cekamo Firestore odmah nastavljamo
-                                val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
-                                prefs.edit()
-                                    .putString("username", username)
-                                    .putBoolean("is_logged_in", true)
-                                    .apply()
-                                isLoading = false
-                                onSignUpSuccess()
+                                    .addOnSuccessListener {
+                                        val prefs = context.getSharedPreferences("gamebot_prefs", Context.MODE_PRIVATE)
+                                        prefs.edit()
+                                            .putString("username", username)
+                                            .putBoolean("is_logged_in", true)
+                                            .apply()
+                                        isLoading = false
+                                        onSignUpSuccess()
+                                    }
+                                    .addOnFailureListener { e ->
+                                        errorMessage = "User was created, but profile was not saved: ${e.message}"
+                                        isLoading = false
+                                    }
                             }
                             .addOnFailureListener { e ->
                                 errorMessage = when {
-                                    e.message?.contains("email") == true -> "Email već postoji"
-                                    else -> "Greška pri registraciji, pokušajte ponovo"
+                                    e.message?.contains("email") == true -> "Email already exists"
+                                    else -> "Registration failed, please try again"
                                 }
                                 isLoading = false
                             }
